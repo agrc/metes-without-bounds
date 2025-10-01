@@ -3,9 +3,12 @@
     "agrc",
     "arcgis",
     "arcpy",
+    "basemeridian",
     "Codecov",
     "finditer",
+    "geoprocessing",
     "getenv",
+    "gpkg",
     "instafail",
     "mapserv",
     "metatable",
@@ -29,7 +32,9 @@
     "worknote"
   ],
   "editor.formatOnSave": true,
-  "editor.rulers": [120],
+  "editor.rulers": [
+    120
+  ],
   "coverage-gutters.showGutterCoverage": false,
   "coverage-gutters.showLineCoverage": true,
   "coverage-gutters.showRulerCoverage": false,

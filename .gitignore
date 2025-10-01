@@ -30,3 +30,8 @@ __pycache__
 .DS_Store
 cov.xml
 .coverage
+
+# arcgis pro
+maps/Index/
+maps/default.gdb/
+maps/*.sde

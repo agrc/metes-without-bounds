@@ -9,7 +9,8 @@
         "ms-python.python",
         "donjayamanne.python-environment-manager",
         "charliermarsh.ruff",
-        "tamasfe.even-better-toml"
+        "tamasfe.even-better-toml",
+        "esri.arcgis-pro-debugger"
     ],
     // List of extensions recommended by VS Code that should not be recommended for users of this workspace.
     "unwantedRecommendations": []

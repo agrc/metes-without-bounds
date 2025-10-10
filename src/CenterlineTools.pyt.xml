@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<metadata xml:lang="en">
+	<Esri>
+		<CreaDate>20251007</CreaDate>
+		<CreaTime>20220300</CreaTime>
+		<ArcGISFormat>1.0</ArcGISFormat>
+		<SyncOnce>TRUE</SyncOnce>
+		<ModDate>20251009</ModDate>
+		<ModTime>181239</ModTime>
+		<ArcGISProfile>ItemDescription</ArcGISProfile>
+	</Esri>
+	<toolbox name="CenterlineTools" alias="centerlinetools">
+		<arcToolboxHelpPath>c:\program files\arcgis\pro\Resources\Help\gp</arcToolboxHelpPath>
+		<toolsets/>
+	</toolbox>
+	<dataIdInfo>
+		<idCitation>
+			<resTitle>CenterlineTools</resTitle>
+		</idCitation>
+		<idAbs>A collection of geoprocessing tools for working with centerlines.</idAbs>
+		<idPurp>A collection of tools for working with centerlines</idPurp>
+		<searchKeys>
+			<keyword>vector</keyword>
+		</searchKeys>
+	</dataIdInfo>
+	<distInfo>
+		<distributor>
+			<distorFormat>
+				<formatName>ArcToolbox Toolbox</formatName>
+			</distorFormat>
+		</distributor>
+	</distInfo>
+	<mdHrLv>
+		<ScopeCd value="005"></ScopeCd>
+	</mdHrLv>
+	<mdDateSt Sync="TRUE">20251009</mdDateSt>
+</metadata>

@@ -20,7 +20,6 @@ __pycache__
 # Installer logs
 pip-log.txt
 
-*.pyt.xml
 *.csv.xml
 arc.dir
 .pytest_cache
@@ -32,6 +31,9 @@ cov.xml
 .coverage
 
 # arcgis pro
-maps/Index/
-maps/default.gdb/
-maps/*.sde
+/maps/Index
+/maps/default.gdb
+/data/default.gdb
+/maps/*.sde
+/maps/GPMessages
+/maps/.backups

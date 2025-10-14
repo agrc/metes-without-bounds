@@ -16,24 +16,23 @@ jobs:
 
     steps:
       - name: ⬇️ Set up code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           show-progress: false
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           cache: pip
-          cache-dependency-path: setup.py
 
       - name: 🏗 Install module
-        run: pip install .[tests]
+        run: pip install -r requirements.dev.txt
 
       - name: 🧶 Lint
         run: ruff check --output-format=github .
 
       - name: 🧪 Run pytest
-        run: pytest
+        run: python -m pytest tests/test_main.py
 
       - name: ⬆️ Upload coverage to Codecov
         uses: codecov/codecov-action@v5

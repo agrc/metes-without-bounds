@@ -1,6 +1,6 @@
 # Meets without bounds
 
-An ArcGIS geoprocessing tool for describing a polyline feature.
+An ArcGIS python geoprocessing toolbox script tool for describing a polyline feature.
 
 > [!Warning]
 > No warranties or certification, express or implied, are provided for any and all road centerline descriptions provided by the Utah Geospatial Resource Center (UGRC). The following road centerline description has been compiled as a best effort service strictly for general purpose informational use and any interpretations made are the responsibility of the User.
@@ -11,6 +11,21 @@ An ArcGIS geoprocessing tool for describing a polyline feature.
 
 ## Development
 
-1. Open the ArcGIS Pro project in the `maps` folder
-1. Using the ArcGIS Pro Debugger, attach to the ArcGIS Pro process
-1. Set breakpoints in VSCode and run the tool in ArcGIS Pro from the Toolbox area in the Catalog pane
+1. Open the ArcGIS Pro project in the `/maps` folder
+1. In VSCode, select the arcgispro-py3 environment or the mwb environment created below
+1. Using the ArcGIS Pro Debugger extension, enable debugging
+1. Using the ArcGIS Pro Debugger extension, attach to the ArcGIS Pro process
+1. Set breakpoints in VSCode and execute the tool in ArcGIS Pro from the Toolbox area of the Catalog pane
+
+## Testing
+
+1. Create a conda python virtual environment
+   `conda create --name mwb python=3.11`
+1. Activate the environment
+   `activate mwb`
+1. Install arcpy
+   `conda install arcpy=3.5 -c esri`
+1. Install development requirements
+   `pip install -r requirements.dev.txt`
+1. Run the tests
+   `python -m pytest tests/test_main.py`

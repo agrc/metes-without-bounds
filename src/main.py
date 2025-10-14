@@ -157,11 +157,11 @@ def calculate_grid_bearing(start_point, end_point, distance_meters):
     degrees = int(angle)
     minutes_float = (angle - degrees) * 60
     minutes = int(minutes_float)
-    seconds = round(((minutes_float - minutes) * 60))
+    seconds = int(round(((minutes_float - minutes) * 60)))
 
     distance_feet = meters_to_us_feet(distance_meters)
 
-    bearing = f"{y_direction}{degrees}°{minutes}'{seconds:02d}{QUOTE_CHAR}{x_direction} {distance_feet} ft"
+    bearing = f"{y_direction}{degrees}°{minutes}'{seconds}{QUOTE_CHAR}{x_direction} {distance_feet} ft"
 
     return bearing
 

@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+__version__ = "1.0.0"
+
 import arcpy
 
 from main import format_traversal, get_disclaimer, get_selected_polyline, process_polyline
@@ -21,7 +23,7 @@ class Toolbox:
         self.label = "CenterlineTools"
         self.alias = "centerlinetools"
 
-        self.tools = [CenterlineDescribe]
+        self.tools = [CenterlineDescribe, Update]
 
 
 class CenterlineDescribe:
@@ -290,4 +292,172 @@ class CenterlineDescribe:
         else:
             parameter.clearMessage()
 
+        return
+
+
+class Update:
+    def __init__(self):
+        """Initializes the Update Centerline Tools geoprocessing tool.
+
+        This tool checks for updates to the CenterlineTools toolbox from the
+        GitHub repository and downloads/installs the latest version if available.
+        """
+        self.label = "Update Centerline Tools"
+        self.description = "Check for and install updates to the CenterlineTools toolbox from GitHub."
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """No parameters required for this tool.
+
+        Returns:
+            list: Empty list as no parameters are needed
+        """
+        return []
+
+    def isLicensed(self):
+        """Tool is always licensed.
+
+        Returns:
+            bool: Always returns True
+        """
+        return True
+
+    def updateParameters(self, parameters):
+        """No parameters to update.
+
+        Args:
+            parameters (list): Empty list
+
+        Returns:
+            None
+        """
+        return
+
+    def updateMessages(self, parameters):
+        """No parameter validation needed.
+
+        Args:
+            parameters (list): Empty list
+
+        Returns:
+            None
+        """
+        return
+
+    def execute(self, parameters, messages):
+        """Check for updates and install if available.
+
+        Queries the GitHub API for the latest release, compares versions,
+        and downloads/installs the update if a newer version is available.
+
+        Args:
+            parameters (list): Empty list (no parameters)
+            messages: ArcGIS messages object for user feedback
+        """
+        import zipfile
+        from io import BytesIO
+        from pathlib import Path
+
+        import requests
+        from packaging import version
+
+        repo_owner = "agrc"
+        repo_name = "metes-without-bounds"
+        current_version = __version__
+
+        messages.addMessage("Checking for updates...")
+
+        api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases/latest"
+        headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+
+        try:
+            response = requests.get(api_url, headers=headers, timeout=10)
+            response.raise_for_status()
+            release_data = response.json()
+
+            latest_tag = release_data["tag_name"]
+            latest_version = latest_tag.lstrip("v")
+            release_notes = release_data.get("body", "No release notes available.")
+
+            if version.parse(latest_version) <= version.parse(current_version):
+                messages.addMessage(f"✅ The current version, {current_version}, is still the latest version.")
+
+                return
+
+            messages.addMessage(f"🎉 New version available: {latest_version}")
+            messages.addMessage("\n\nRelease Notes:")
+            messages.addMessage("-" * 50)
+            messages.addMessage(release_notes)
+            messages.addMessage("-" * 50)
+
+            asset_url = None
+            for asset in release_data.get("assets", []):
+                if asset["name"] == "CenterlineTools.zip":
+                    asset_url = asset["browser_download_url"]
+                    break
+
+            if not asset_url:
+                messages.addErrorMessage("❌ Could not find assets in the latest release.")
+
+                return
+
+            download_response = requests.get(asset_url, timeout=30)
+            download_response.raise_for_status()
+            zip_data = BytesIO(download_response.content)
+
+            messages.addMessage("Installing update...")
+
+            install_dir = Path(__file__).parent
+            allowed_files = {"main.py", "CenterlineTools.pyt"}
+
+            with zipfile.ZipFile(zip_data) as zip_ref:
+                for file_info in zip_ref.filelist:
+                    filename = file_info.filename
+
+                    if filename not in allowed_files:
+                        continue
+
+                    target_path = install_dir / filename
+
+                    # Prevent zip slip attacks - ensure target_path is within install_dir
+                    try:
+                        target_path.resolve().relative_to(install_dir.resolve())
+                    except ValueError:
+                        messages.addErrorMessage(f"Security Error: Invalid file path in zip: {filename}")
+                        return
+
+                    messages.addMessage(f"  Updating {filename}")
+
+                    # Extract the file
+                    with zip_ref.open(filename) as source:
+                        target_path.write_bytes(source.read())
+
+            messages.addMessage(f"\n\n✅ Successfully updated to version {latest_version}.")
+            messages.addMessage("ℹ️ You must restart ArcGIS Pro to use the new version.")
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                messages.addErrorMessage("No releases have been published yet for this tool.")
+            else:
+                messages.addErrorMessage(f"HTTP Error: {e.response.status_code} - {e.response.reason}")
+        except requests.exceptions.ConnectionError:
+            messages.addErrorMessage("Network connection error. Please check your internet connection.")
+        except requests.exceptions.Timeout:
+            messages.addErrorMessage("Request timed out. Please try again later.")
+        except requests.exceptions.RequestException as e:
+            messages.addErrorMessage(f"Request error: {str(e)}")
+        except zipfile.BadZipFile:
+            messages.addErrorMessage("Downloaded file is not a valid zip archive.")
+        except Exception as e:
+            messages.addErrorMessage(f"Unexpected error: {str(e)}")
+
+    def postExecute(self, parameters):
+        """No post-execution operations needed.
+
+        Args:
+            parameters (list): Empty list
+
+        Returns:
+            None
+        """
         return

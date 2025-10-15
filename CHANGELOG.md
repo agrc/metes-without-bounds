@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/agrc/metes-without-bounds/compare/v1.0.0...v1.0.1) (2025-10-15)
+
+
+### Features
+
+* create tool to synchronize the tool with github release assets ([f9ef0f8](https://github.com/agrc/metes-without-bounds/commit/f9ef0f8b6a07b2899d958f8410c1757fb36d25cc))
+
 ## 1.0.0 (2025-10-15)
 
 

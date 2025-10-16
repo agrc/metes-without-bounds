@@ -9,6 +9,56 @@ An ArcGIS python geoprocessing toolbox script tool for describing a polyline fea
 >
 > By using the information contained herein, the User is stating that the above Disclaimer has been read and that he/she has full understanding and is in agreement with the contents of this disclaimer. The road centerline information in this document was calculated and formatted using digital tools. The descriptions are NOT intended to be used for legal litigation, boundary disputes, or construction planning. These descriptions are for general reference or informational use only. Users interested in pursuing legal litigation and/or boundary disputes should consult an attorney or licensed surveyor, or both.
 
+## Usage
+
+> [!TIP]
+> **First time using this tool?** Follow these three steps:
+>
+> 1. Download and extract from Releases
+> 2. Connect to Open SGID for PLSS data
+> 3. Add the toolbox to ArcGIS Pro
+
+### Acquire the tool
+
+1. Navigate to the [GitHub releases screen](https://github.com/agrc/metes-without-bounds/releases)
+2. Download the `CenterlineTools.zip` asset from the latest release
+3. Extract the zip file to a location in your ArcGIS Pro project (recommended: a registered project folder)
+4. Keep the toolbox updated by running the `Update Centerline Tools` tool regularly
+
+### Required data
+
+The tool requires two inputs:
+
+1. **Centerline layer**: A polyline feature layer with:
+   - Projection: UTM NAD83 Zone 12N (EPSG:26912)
+   - Exactly one feature selected
+
+2. **PLSS Sections layer**: [PLSS Sections GCDB](https://gis.utah.gov/products/sgid/cadastre/plss-sections/) polygon layer from the Utah SGID with:
+   - Projection: UTM NAD83 Zone 12N (EPSG:26912)
+   - Fields: `basemeridian`, `label`, `snum`
+
+**Recommended data source**: Use the [Open SGID](https://gis.utah.gov/documentation/sgid/#the-open-sgid-database) to access PLSS data. See [connection instructions](https://gis.utah.gov/documentation/sgid/open-sgid/) if needed. Browse to `cadastre > plss_sections_gcdb`.
+
+### Running the tool
+
+1. In ArcGIS Pro, open the **Catalog pane**
+2. Right-click **Toolboxes** and select **Add Toolbox**
+3. Navigate to the extracted `CenterlineTools.pyt` file and select it
+4. Trust the code when prompted
+5. Expand **CenterlineTools** in the Catalog pane
+6. Double-click **Centerline Describe** to open the tool
+7. Select your parameters:
+   - **Input Feature Layer**: Your centerline layer (with one feature selected)
+   - **PLSS Section Reference Layer**: The PLSS sections layer
+8. Click **Run**
+9. Click **View Details** to see and copy the results
+
+### Troubleshooting
+
+- **"No features found"**: Ensure exactly one feature is selected in your centerline layer
+- **"Invalid projection"**: Both layers must use UTM NAD83 Zone 12N (EPSG:26912)
+- **"Missing fields"**: Verify your PLSS layer is from the SGID `plss_sections_gcdb` table
+
 ## Development
 
 1. Open the ArcGIS Pro project in the `/maps` folder

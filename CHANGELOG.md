@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/agrc/metes-without-bounds/compare/v1.0.1...v1.0.2) (2025-10-16)
+
+
+### Documentation
+
+* add usage instructions ([40d0c5a](https://github.com/agrc/metes-without-bounds/commit/40d0c5a16c67456cde385baacc16e2173c66fd51))
+
 ## [1.0.1](https://github.com/agrc/metes-without-bounds/compare/v1.0.0...v1.0.1) (2025-10-15)
 
 

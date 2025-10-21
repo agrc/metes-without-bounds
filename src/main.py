@@ -18,6 +18,10 @@ ArcGIS Python Toolbox (CenterlineTools.pyt) for use in geoprocessing tools.
 
 import math
 
+MODE_APPEND = "a"
+MODE_WRITE = "w"
+ENCODING = "utf-8"
+NEWLINE = ""
 QUOTE_CHAR = '"'
 
 
@@ -259,26 +263,25 @@ By using the information contained herein, the User is stating that the above Di
 """
 
 
-def get_selected_polyline(feature_layer):
-    """Retrieves the first selected polyline from a feature layer.
+def get_selected_polyline(feature_layer, unique_id):
+    """Retrieves the first selected polyline and unique id from a feature layer.
 
     Args:
         feature_layer: The feature layer to read from (arcpy layer or path)
+        unique_id (str): The field name of the unique identifier for the feature
 
     Returns:
-        The first polyline geometry from the layer, or None if no features found
+        tuple: (polyline, id) if a feature is found, or None if no features found
 
     Raises:
         StopIteration: If the cursor is empty (no features in the layer)
     """
     import arcpy
 
-    with arcpy.da.SearchCursor(feature_layer, ["SHAPE@"]) as search_cursor:
-        row = next(search_cursor, None)
-        if row is None:
-            return None
+    with arcpy.da.SearchCursor(feature_layer, ["SHAPE@", unique_id]) as search_cursor:
+        row = next(search_cursor, (None, None))
 
-        return row[0]
+        return row
 
 
 def get_plss_traversal(polyline, plss_sections, plss_schema):
@@ -376,3 +379,104 @@ def process_polyline(polyline, plss_sections, plss_schema):
                 last_point = point
 
     return result
+
+
+def csv_has_header(csv_path, expected_fieldnames):
+    """Checks if a CSV file has the expected header row.
+
+    Reads the first line of a CSV file and compares it with the expected
+    field names to determine if the header is present.
+
+    Args:
+        csv_path (Path): Path object to the CSV file
+        expected_fieldnames (list): List of expected field names
+
+    Returns:
+        bool: True if the header is present and matches, False otherwise
+    """
+    import csv
+
+    try:
+        with csv_path.open(encoding=ENCODING, newline=NEWLINE) as rf:
+            first_row = next(csv.reader(rf))
+            return first_row == expected_fieldnames
+    except (StopIteration, FileNotFoundError):
+        return False
+
+
+def save_description_to(description, unique_id, survey123, bearings):
+    """Saves centerline description data to CSV and bearing files.
+
+    Appends description data to a Survey123 CSV file and writes bearing
+    information to a separate text file. The CSV contains summary information
+    while detailed bearing data is stored in individual text files.
+
+    Args:
+        description (dict): Description dictionary containing:
+            - 'traversal': Dict from format_traversal() with meridian/township keys
+            - 'starting': Dict with 'lat' and 'lon' in DMS format
+            - 'ending': Dict with 'lat' and 'lon' in DMS format
+            - 'bearings': List of bearing strings
+        unique_id (str): Unique identifier for this centerline feature
+        survey123 (str): Path to the CSV file to append data to
+        bearings (str): Path to the folder where bearing text files are written
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If file operations fail (CSV write or bearing file write)
+
+    Example:
+        >>> desc = {
+        ...     'traversal': {'Salt Lake Base and Meridian T01S R01W': [1, 2]},
+        ...     'starting': {'lat': '40°45\'30"N', 'lon': '111°52\'15"W'},
+        ...     'ending': {'lat': '40°46\'00"N', 'lon': '111°53\'00"W'},
+        ...     'bearings': ['N45°30\'15"E 328.1 ft', 'N50°20\'10"E 250.3 ft']
+        ... }
+        >>> save_description_to(desc, 'ROAD_001', '/path/to/output.csv', '/path/to/bearings')
+    """
+    import csv
+    from os import linesep
+    from pathlib import Path
+
+    starting_text = f"Latitude: {description['starting']['lat']} and Longitude: {description['starting']['lon']}"
+    ending_text = f"Latitude: {description['ending']['lat']} and Longitude: {description['ending']['lon']}"
+
+    formatted_traversal = format_traversal(description["traversal"])
+    traversal_lines = []
+
+    for meridian_township, sections in formatted_traversal.items():
+        sections_text = ", ".join(str(s) for s in sections)
+        traversal_lines.append(f"{meridian_township}: Sections {sections_text}")
+
+    traversal = " | ".join(traversal_lines)
+
+    csv_path = Path(survey123)
+    fieldnames = ["id", "starting", "ending", "traversal"]
+
+    with csv_path.open(MODE_APPEND, newline=NEWLINE, encoding=ENCODING) as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+
+        if not csv_has_header(csv_path, fieldnames):
+            writer.writeheader()
+
+        writer.writerow(
+            {
+                "id": unique_id,
+                "starting": starting_text,
+                "ending": ending_text,
+                "traversal": traversal,
+            }
+        )
+
+    bearings_folder = Path(bearings)
+    bearings_file = bearings_folder / f"{unique_id}_bearings.txt"
+
+    with bearings_file.open(MODE_WRITE, encoding=ENCODING) as f:
+        lines = (f"{i}. {bearing}{linesep}" for i, bearing in enumerate(description["bearings"], 1))
+        f.writelines(lines)
+
+    disclaimer = bearings_folder / "disclaimer.txt"
+    with disclaimer.open(MODE_WRITE, encoding=ENCODING) as f:
+        f.write(get_disclaimer())

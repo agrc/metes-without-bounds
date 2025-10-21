@@ -1,10 +1,22 @@
 # -*- coding: utf-8 -*-
 
 __version__ = "1.0.1" # x-release-please-version
+__version__ = "1.0.1"  # x-release-please-version
 
 import arcpy
 
-from main import format_traversal, get_disclaimer, get_selected_polyline, process_polyline
+from main import (
+    ENCODING,
+    MODE_WRITE,
+    NEWLINE,
+    csv_has_header,
+    get_disclaimer,
+    get_selected_polyline,
+    process_polyline,
+    save_description_to,
+)
+
+SURVEY_FILENAME = "survey123_data.csv"
 
 
 class Toolbox:
@@ -97,6 +109,17 @@ class CenterlineDescribe:
 
         input_data.filter.list = ["Polyline"]  # pyright: ignore[reportOptionalMemberAccess]
 
+        unique_id = arcpy.Parameter(
+            displayName="Unique ID Field",
+            name="in_unique_id",
+            datatype="Field",
+            parameterType="Required",
+            direction="Input",
+        )
+
+        unique_id.parameterDependencies = ["in_features"]  # pyright: ignore[reportAttributeAccessIssue]
+        unique_id.filter.list = ["String", "Text"]  # pyright: ignore[reportOptionalMemberAccess]
+
         plss_sections = arcpy.Parameter(
             displayName="PLSS Section Reference Layer",
             name="in_plss",
@@ -107,7 +130,25 @@ class CenterlineDescribe:
 
         plss_sections.filter.list = ["Polygon"]  # pyright: ignore[reportOptionalMemberAccess]
 
-        return [input_data, plss_sections]
+        survey123_csv = arcpy.Parameter(
+            displayName="Survey123 Report CSV",
+            name="in_survey123_csv",
+            datatype="DEFile",
+            parameterType="Required",
+            direction="Input",
+        )
+
+        survey123_csv.filter.list = ["csv"]  # pyright: ignore[reportOptionalMemberAccess]
+
+        bearing_destination = arcpy.Parameter(
+            displayName="Bearing Output Destination Folder",
+            name="in_bearing_destination",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Input",
+        )
+
+        return [input_data, unique_id, plss_sections, survey123_csv, bearing_destination]
 
     def updateParameters(self, parameters):
         """Updates parameter values and properties dynamically based on user input.
@@ -138,9 +179,14 @@ class CenterlineDescribe:
 
     def updateMessages(self, parameters):
         """Modify the messages created by internal validation for each tool
-        parameter. This method is called after internal validation."""
-        self._validate_centerline(parameters[0])
-        self._validate_plss(parameters[1])
+        parameter. This method is called after internal validation.
+        """
+        # Access parameters by name for clarity and maintainability
+        params = {p.name: p for p in parameters}
+
+        self._validate_centerline(params["in_features"])
+        self._validate_plss(params["in_plss"])
+        self._validate_survey123_csv(params["in_survey123_csv"])
 
         return
 
@@ -153,37 +199,33 @@ class CenterlineDescribe:
         - Starting and ending coordinates in DMS format
         - Grid bearing and distance for each segment in us survey feet
         """
-        polyline = get_selected_polyline(parameters[0].value)
-        if polyline is None:
+        # Access parameters by name for clarity and maintainability
+        params = {p.name: p for p in parameters}
+
+        selected_row = get_selected_polyline(params["in_features"].value, params["in_unique_id"].valueAsText)
+
+        if selected_row is None or selected_row[0] is None:
             messages.addErrorMessage("No features found in the selected layer.")
 
             return
 
+        polyline, id = selected_row
+
         result = process_polyline(
             polyline,
-            parameters[1].value,
+            params["in_plss"].value,
             self.plss_schema,
         )
 
         messages.addMessage(get_disclaimer())
-        messages.addMessage("\nTraversal:")
+        messages.addMessage(f"\nSaving Survey123 results to {params['in_survey123_csv'].valueAsText}...")
+        messages.addMessage(
+            f"Saving bearing results to {params['in_bearing_destination'].valueAsText}\\{id}_bearings.txt..."
+        )
 
-        traversal = format_traversal(result["traversal"])
-        for key, sections in traversal.items():
-            term = "Sections" if len(sections) > 1 else "Section"
-            messages.addMessage(f"  {key}: {term} {', '.join(map(str, sections))}")
-
-        messages.addMessage("\nStarting:")
-        messages.addMessage(f"  Latitude: {result['starting']['lat']}")
-        messages.addMessage(f"  Longitude: {result['starting']['lon']}")
-
-        messages.addMessage("\nEnding:")
-        messages.addMessage(f"  Latitude: {result['ending']['lat']}")
-        messages.addMessage(f"  Longitude: {result['ending']['lon']}")
-
-        messages.addMessage("\nBearings:")
-        for i, bearing in enumerate(result["bearings"], 1):
-            messages.addMessage(f"  {i}. {bearing}")
+        save_description_to(
+            result, id, params["in_survey123_csv"].valueAsText, params["in_bearing_destination"].valueAsText
+        )
 
     def postExecute(self, parameters):
         """Performs cleanup or post-processing after tool execution completes.
@@ -206,6 +248,19 @@ class CenterlineDescribe:
         Returns:
             None
         """
+        import os
+        from pathlib import Path
+
+        params = {p.name: p for p in parameters}
+
+        if not params["in_bearing_destination"].value:
+            return
+
+        folder = Path(params["in_bearing_destination"].valueAsText)
+
+        if folder.exists():
+            os.startfile(str(folder))
+
         return
 
     def _validate_centerline(self, parameter):
@@ -291,6 +346,29 @@ class CenterlineDescribe:
             parameter.setErrorMessage("details\n\n" + numbered_errors)
         else:
             parameter.clearMessage()
+
+        return
+
+    def _validate_survey123_csv(self, parameter):
+        """Validates the Survey123 CSV input parameter.
+
+        Ensures the selected file is a valid CSV file.
+
+        Args:
+            parameter (arcpy.Parameter): The input file parameter to validate
+        """
+        if not parameter.value:
+            return
+
+        parameter.clearMessage()
+
+        from pathlib import Path
+
+        csv_path = Path(parameter.valueAsText)
+
+        fieldnames = ["id", "starting", "ending", "traversal"]
+        if not csv_has_header(csv_path, fieldnames):
+            parameter.setErrorMessage("The Survey123 file does not have the required header values.")
 
         return
 

@@ -14,6 +14,7 @@ from packaging import version
 
 from main import (
     ENCODING,
+    FIELD_NAMES,
     MODE_WRITE,
     NEWLINE,
     csv_has_header,
@@ -227,7 +228,7 @@ class CenterlineDescribe:
         messages.addMessage(get_disclaimer())
         messages.addMessage(f"\nSaving Survey123 results to {params['in_survey123_csv'].valueAsText}...")
         messages.addMessage(
-            f"Saving bearing results to {params['in_bearing_destination'].valueAsText}\\{id}_bearings.txt..."
+            f"Saving bearing results to {Path(params['in_bearing_destination'].valueAsText) / f'{id}_bearings.txt'}..."
         )
 
         save_description_to(
@@ -368,8 +369,7 @@ class CenterlineDescribe:
 
         csv_path = Path(parameter.valueAsText)
 
-        fieldnames = ["id", "starting", "ending", "traversal"]
-        if not csv_has_header(csv_path, fieldnames):
+        if not csv_has_header(csv_path, FIELD_NAMES):
             parameter.setErrorMessage("The Survey123 file does not have the required header values.")
 
         return
@@ -379,8 +379,9 @@ class Survey123Export:
     def __init__(self):
         """Initializes the Survey123 Export geoprocessing tool.
 
-        This tool exports the centerline description results to a CSV file
-        formatted for use with Survey123 forms.
+        This tool creates an empty CSV file with the required header fields
+        for storing centerline description results that will be used with
+        Survey123 forms.
         """
         self.label = "Create Survey123 CSV"
         self.description = "Create the CSV file required by the centerline describe tool"
@@ -445,24 +446,22 @@ class Survey123Export:
         return
 
     def execute(self, parameters, messages):
-        """Check for updates and install if available.
+        """Creates a CSV file with the required header for Survey123 integration.
 
-        Queries the GitHub API for the latest release, compares versions,
-        and downloads/installs the update if a newer version is available.
+        Generates a new CSV file with columns for id, starting coordinates,
+        ending coordinates, and PLSS section traversal data. The file will be
+        used to store centerline description results.
 
         Args:
-            parameters (list): Empty list (no parameters)
+            parameters (list): Tool parameters containing the destination folder
             messages: ArcGIS messages object for user feedback
         """
         folder = Path(parameters[0].valueAsText)
         csv_path = folder / SURVEY_FILENAME
 
         with csv_path.open(MODE_WRITE, newline=NEWLINE, encoding=ENCODING) as csv_file:
-            fieldnames = ["id", "starting", "ending", "traversal"]
-            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-
-            if not csv_has_header(csv_path, fieldnames):
-                writer.writeheader()
+            writer = csv.DictWriter(csv_file, fieldnames=FIELD_NAMES)
+            writer.writeheader()
 
     def postExecute(self, parameters):
         """No post-execution operations needed.

@@ -7,6 +7,7 @@ Tests coordinate conversions, bearing calculations, and formatting functions.
 """
 
 import csv
+from typing import cast
 
 import pytest
 
@@ -16,6 +17,7 @@ from src.main import (
     MODE_WRITE,
     NEWLINE,
     QUOTE_CHAR,
+    DescriptionDict,
     calculate_grid_bearing,
     csv_has_header,
     decimal_degrees_to_dms,
@@ -465,12 +467,15 @@ class TestSaveDescriptionTo:
         bearings_folder = tmp_path / "bearings"
         bearings_folder.mkdir()
 
-        description = {
-            "traversal": {"26-T01S R01W": [1, 2]},
-            "starting": {"lat": '40°45\'30"N', "lon": '111°52\'15"W'},
-            "ending": {"lat": '40°46\'00"N', "lon": '111°53\'00"W'},
-            "bearings": ['N45°30\'15"E 328.1 ft'],
-        }
+        description = cast(
+            DescriptionDict,
+            {
+                "traversal": {"26-T01S R01W": [1, 2]},
+                "starting": {"lat": "40°45'30\"N", "lon": "111°52'15\"W"},
+                "ending": {"lat": "40°46'00\"N", "lon": "111°53'00\"W"},
+                "bearings": ["N45°30'15\"E 328.1 ft"],
+            },
+        )
 
         save_description_to(description, "ROAD_001", str(csv_file), str(bearings_folder))
 
@@ -493,12 +498,15 @@ class TestSaveDescriptionTo:
         bearings_folder = tmp_path / "bearings"
         bearings_folder.mkdir()
 
-        description = {
-            "traversal": {"26-T01S R01W": [1]},
-            "starting": {"lat": '40°45\'30"N', "lon": '111°52\'15"W'},
-            "ending": {"lat": '40°46\'00"N', "lon": '111°53\'00"W'},
-            "bearings": ['N45°30\'15"E 328.1 ft'],
-        }
+        description = cast(
+            DescriptionDict,
+            {
+                "traversal": {"26-T01S R01W": [1]},
+                "starting": {"lat": "40°45'30\"N", "lon": "111°52'15\"W"},
+                "ending": {"lat": "40°46'00\"N", "lon": "111°53'00\"W"},
+                "bearings": ["N45°30'15\"E 328.1 ft"],
+            },
+        )
 
         # Save twice
         save_description_to(description, "ROAD_001", str(csv_file), str(bearings_folder))
@@ -519,12 +527,15 @@ class TestSaveDescriptionTo:
         bearings_folder = tmp_path / "bearings"
         bearings_folder.mkdir()
 
-        description = {
-            "traversal": {"26-T01S R01W": [1, 2], "30-T02N R03E": [15, 14]},
-            "starting": {"lat": '40°45\'30"N', "lon": '111°52\'15"W'},
-            "ending": {"lat": '40°46\'00"N', "lon": '111°53\'00"W'},
-            "bearings": ['N45°30\'15"E 328.1 ft'],
-        }
+        description = cast(
+            DescriptionDict,
+            {
+                "traversal": {"26-T01S R01W": [1, 2], "30-T02N R03E": [15, 14]},
+                "starting": {"lat": "40°45'30\"N", "lon": "111°52'15\"W"},
+                "ending": {"lat": "40°46'00\"N", "lon": "111°53'00\"W"},
+                "bearings": ["N45°30'15\"E 328.1 ft"],
+            },
+        )
 
         save_description_to(description, "ROAD_001", str(csv_file), str(bearings_folder))
 
@@ -544,12 +555,15 @@ class TestSaveDescriptionTo:
         bearings_folder = tmp_path / "bearings"
         bearings_folder.mkdir()
 
-        description = {
-            "traversal": {"26-T01S R01W": [1]},
-            "starting": {"lat": '40°45\'30"N', "lon": '111°52\'15"W'},
-            "ending": {"lat": '40°46\'00"N', "lon": '111°53\'00"W'},
-            "bearings": ['N45°30\'15"E 328.1 ft', 'N50°20\'10"E 250.3 ft'],
-        }
+        description = cast(
+            DescriptionDict,
+            {
+                "traversal": {"26-T01S R01W": [1]},
+                "starting": {"lat": "40°45'30\"N", "lon": "111°52'15\"W"},
+                "ending": {"lat": "40°46'00\"N", "lon": "111°53'00\"W"},
+                "bearings": ["N45°30'15\"E 328.1 ft", "N50°20'10\"E 250.3 ft"],
+            },
+        )
 
         save_description_to(description, "ROAD_001", str(csv_file), str(bearings_folder))
 
@@ -566,12 +580,15 @@ class TestSaveDescriptionTo:
         bearings_folder = tmp_path / "bearings"
         bearings_folder.mkdir()
 
-        description = {
-            "traversal": {"26-T01S R01W": [1]},
-            "starting": {"lat": '40°45\'30"N', "lon": '111°52\'15"W'},
-            "ending": {"lat": '40°46\'00"N', "lon": '111°53\'00"W'},
-            "bearings": ['N45°30\'15"E 328.1 ft'],
-        }
+        description = cast(
+            DescriptionDict,
+            {
+                "traversal": {"26-T01S R01W": [1]},
+                "starting": {"lat": "40°45'30\"N", "lon": "111°52'15\"W"},
+                "ending": {"lat": "40°46'00\"N", "lon": "111°53'00\"W"},
+                "bearings": ["N45°30'15\"E 328.1 ft"],
+            },
+        )
 
         save_description_to(description, "ROAD_001", str(csv_file), str(bearings_folder))
 
@@ -588,12 +605,15 @@ class TestSaveDescriptionTo:
         bearings_folder = tmp_path / "bearings"
         bearings_folder.mkdir()
 
-        description = {
-            "traversal": {"26-T01S R01W": [1]},
-            "starting": {"lat": '40°45\'30"N', "lon": '111°52\'15"W'},
-            "ending": {"lat": '40°46\'00"N', "lon": '111°53\'00"W'},
-            "bearings": [],
-        }
+        description = cast(
+            DescriptionDict,
+            {
+                "traversal": {"26-T01S R01W": [1]},
+                "starting": {"lat": "40°45'30\"N", "lon": "111°52'15\"W"},
+                "ending": {"lat": "40°46'00\"N", "lon": "111°53'00\"W"},
+                "bearings": [],
+            },
+        )
 
         save_description_to(description, "ROAD_001", str(csv_file), str(bearings_folder))
 
@@ -612,12 +632,15 @@ class TestSaveDescriptionTo:
         bearings_folder = tmp_path / "bearings"
         bearings_folder.mkdir()
 
-        description = {
-            "traversal": {},
-            "starting": {"lat": '40°45\'30"N', "lon": '111°52\'15"W'},
-            "ending": {"lat": '40°46\'00"N', "lon": '111°53\'00"W'},
-            "bearings": ['N45°30\'15"E 328.1 ft'],
-        }
+        description = cast(
+            DescriptionDict,
+            {
+                "traversal": {},
+                "starting": {"lat": "40°45'30\"N", "lon": "111°52'15\"W"},
+                "ending": {"lat": "40°46'00\"N", "lon": "111°53'00\"W"},
+                "bearings": ["N45°30'15\"E 328.1 ft"],
+            },
+        )
 
         save_description_to(description, "ROAD_001", str(csv_file), str(bearings_folder))
 
@@ -634,12 +657,15 @@ class TestSaveDescriptionTo:
         bearings_folder = tmp_path / "bearings"
         bearings_folder.mkdir()
 
-        description = {
-            "traversal": {"26-T01S R01W": [5, 2, 8, 1, 3]},
-            "starting": {"lat": '40°45\'30"N', "lon": '111°52\'15"W'},
-            "ending": {"lat": '40°46\'00"N', "lon": '111°53\'00"W'},
-            "bearings": [],
-        }
+        description = cast(
+            DescriptionDict,
+            {
+                "traversal": {"26-T01S R01W": [5, 2, 8, 1, 3]},
+                "starting": {"lat": "40°45'30\"N", "lon": "111°52'15\"W"},
+                "ending": {"lat": "40°46'00\"N", "lon": "111°53'00\"W"},
+                "bearings": [],
+            },
+        )
 
         save_description_to(description, "ROAD_001", str(csv_file), str(bearings_folder))
 

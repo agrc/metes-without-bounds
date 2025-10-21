@@ -52,6 +52,7 @@ MODE_WRITE = "w"
 ENCODING = "utf-8"
 NEWLINE = ""
 QUOTE_CHAR = '"'
+FIELD_NAMES = ["id", "starting", "ending", "traversal"]
 
 
 def project_point(point: ArcPyPoint, source_spatial_reference: ArcPySpatialReference) -> ArcPyPoint:
@@ -436,7 +437,7 @@ def save_description_to(description: DescriptionDict, unique_id: str, survey123:
 
     Appends description data to a file ready to be imported to Survey123 CSV and writes bearing
     information to a separate text file. The CSV contains summary information
-    while detailed bearing data is stored in a text files.
+    while detailed bearing data is stored in a text file.
 
     Args:
         description (dict): Description dictionary containing:
@@ -477,12 +478,11 @@ def save_description_to(description: DescriptionDict, unique_id: str, survey123:
     traversal = " | ".join(traversal_lines)
 
     csv_path = Path(survey123)
-    fieldnames = ["id", "starting", "ending", "traversal"]
 
-    needs_header = not csv_has_header(csv_path, fieldnames)
+    needs_header = not csv_has_header(csv_path, FIELD_NAMES)
 
     with csv_path.open(MODE_APPEND, newline=NEWLINE, encoding=ENCODING) as csv_file:
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer = csv.DictWriter(csv_file, fieldnames=FIELD_NAMES)
 
         if needs_header:
             writer.writeheader()

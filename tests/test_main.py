@@ -13,6 +13,7 @@ import pytest
 
 from src.main import (
     ENCODING,
+    FIELD_NAMES,
     MODE_APPEND,
     MODE_WRITE,
     NEWLINE,
@@ -334,21 +335,19 @@ class TestCSVHasHeader:
     def test_csv_has_header_with_matching_header(self, tmp_path):
         """Test that function returns True when header matches."""
         csv_file = tmp_path / "test.csv"
-        expected_fieldnames = ["id", "starting", "ending", "traversal"]
 
         # Write CSV with matching header
         with csv_file.open("w", newline=NEWLINE, encoding=ENCODING) as f:
-            writer = csv.DictWriter(f, fieldnames=expected_fieldnames)
+            writer = csv.DictWriter(f, fieldnames=FIELD_NAMES)
             writer.writeheader()
             writer.writerow({"id": "1", "starting": "start", "ending": "end", "traversal": "path"})
 
-        result = csv_has_header(csv_file, expected_fieldnames)
+        result = csv_has_header(csv_file, FIELD_NAMES)
         assert result is True
 
     def test_csv_has_header_with_non_matching_header(self, tmp_path):
         """Test that function returns False when header doesn't match."""
         csv_file = tmp_path / "test.csv"
-        expected_fieldnames = ["id", "starting", "ending", "traversal"]
         actual_fieldnames = ["name", "value", "type"]
 
         # Write CSV with different header
@@ -356,15 +355,14 @@ class TestCSVHasHeader:
             writer = csv.DictWriter(f, fieldnames=actual_fieldnames)
             writer.writeheader()
 
-        result = csv_has_header(csv_file, expected_fieldnames)
+        result = csv_has_header(csv_file, FIELD_NAMES)
         assert result is False
 
     def test_csv_has_header_with_missing_file(self, tmp_path):
         """Test that function returns False when file doesn't exist."""
         csv_file = tmp_path / "nonexistent.csv"
-        expected_fieldnames = ["id", "starting", "ending", "traversal"]
 
-        result = csv_has_header(csv_file, expected_fieldnames)
+        result = csv_has_header(csv_file, FIELD_NAMES)
         assert result is False
 
     def test_csv_has_header_with_empty_file(self, tmp_path):
@@ -372,15 +370,12 @@ class TestCSVHasHeader:
         csv_file = tmp_path / "empty.csv"
         csv_file.touch()  # Create empty file
 
-        expected_fieldnames = ["id", "starting", "ending", "traversal"]
-
-        result = csv_has_header(csv_file, expected_fieldnames)
+        result = csv_has_header(csv_file, FIELD_NAMES)
         assert result is False
 
     def test_csv_has_header_with_partial_match(self, tmp_path):
         """Test that function returns False when header partially matches."""
         csv_file = tmp_path / "test.csv"
-        expected_fieldnames = ["id", "starting", "ending", "traversal"]
         actual_fieldnames = ["id", "starting", "ending"]  # Missing one field
 
         # Write CSV with partial header
@@ -388,13 +383,12 @@ class TestCSVHasHeader:
             writer = csv.DictWriter(f, fieldnames=actual_fieldnames)
             writer.writeheader()
 
-        result = csv_has_header(csv_file, expected_fieldnames)
+        result = csv_has_header(csv_file, FIELD_NAMES)
         assert result is False
 
     def test_csv_has_header_with_different_order(self, tmp_path):
         """Test that function returns False when header fields are in different order."""
         csv_file = tmp_path / "test.csv"
-        expected_fieldnames = ["id", "starting", "ending", "traversal"]
         actual_fieldnames = ["starting", "id", "traversal", "ending"]  # Different order
 
         # Write CSV with reordered header
@@ -402,13 +396,12 @@ class TestCSVHasHeader:
             writer = csv.writer(f)
             writer.writerow(actual_fieldnames)
 
-        result = csv_has_header(csv_file, expected_fieldnames)
+        result = csv_has_header(csv_file, FIELD_NAMES)
         assert result is False
 
     def test_csv_has_header_with_extra_fields(self, tmp_path):
         """Test that function returns False when header has extra fields."""
         csv_file = tmp_path / "test.csv"
-        expected_fieldnames = ["id", "starting", "ending", "traversal"]
         actual_fieldnames = ["id", "starting", "ending", "traversal", "extra"]
 
         # Write CSV with extra field
@@ -416,7 +409,7 @@ class TestCSVHasHeader:
             writer = csv.writer(f)
             writer.writerow(actual_fieldnames)
 
-        result = csv_has_header(csv_file, expected_fieldnames)
+        result = csv_has_header(csv_file, FIELD_NAMES)
         assert result is False
 
     def test_csv_has_header_with_single_field(self, tmp_path):
@@ -435,14 +428,13 @@ class TestCSVHasHeader:
     def test_csv_has_header_with_data_as_first_row(self, tmp_path):
         """Test that function returns False when first row is data, not header."""
         csv_file = tmp_path / "test.csv"
-        expected_fieldnames = ["id", "starting", "ending", "traversal"]
 
         # Write CSV without header (data only)
         with csv_file.open("w", newline=NEWLINE, encoding=ENCODING) as f:
             writer = csv.writer(f)
             writer.writerow(["001", "start_value", "end_value", "path_value"])
 
-        result = csv_has_header(csv_file, expected_fieldnames)
+        result = csv_has_header(csv_file, FIELD_NAMES)
         assert result is False
 
 

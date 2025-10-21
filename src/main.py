@@ -11,6 +11,7 @@ and generating descriptions. It includes functions for:
 - Distance conversions
 - PLSS section traversal formatting
 - Legal disclaimer text
+- Writing the results to files
 
 These functions are designed to be unit testable and are imported by the
 ArcGIS Python Toolbox (CenterlineTools.pyt) for use in geoprocessing tools.
@@ -20,6 +21,31 @@ import csv
 import math
 from os import linesep
 from pathlib import Path
+from typing import Any, Optional, TypedDict
+
+# Type aliases for arcpy types (arcpy doesn't provide type stubs)
+# Using Any here is intentional - these are duck-typed arcpy objects
+ArcPyPoint = Any  # arcpy.Point with X, Y attributes
+ArcPySpatialReference = Any  # arcpy.SpatialReference
+ArcPyPolyline = Any  # arcpy.Polyline geometry
+ArcPyFeatureLayer = Any  # arcpy feature layer or path
+
+
+class CoordinateDict(TypedDict):
+    """Dictionary containing lat/lon coordinates in DMS format."""
+
+    lat: str
+    lon: str
+
+
+class DescriptionDict(TypedDict):
+    """Dictionary containing centerline description data."""
+
+    traversal: dict[str, list[int]]
+    starting: CoordinateDict
+    ending: CoordinateDict
+    bearings: list[str]
+
 
 MODE_APPEND = "a"
 MODE_WRITE = "w"
@@ -28,13 +54,11 @@ NEWLINE = ""
 QUOTE_CHAR = '"'
 
 
-def project_point(point, source_spatial_reference):
+def project_point(point: ArcPyPoint, source_spatial_reference: ArcPySpatialReference) -> ArcPyPoint:
     """Projects a point from one spatial reference system to WGS 84.
 
     Transforms a point's coordinates from its source spatial reference
     (e.g., UTM NAD83 Zone 12N) to a target spatial reference (e.g., WGS84).
-    This is commonly used to convert between projected coordinate systems
-    and geographic coordinate systems for latitude/longitude calculations.
 
     Args:
         point: The point to project with X and Y coordinates (arcpy.Point)
@@ -53,7 +77,7 @@ def project_point(point, source_spatial_reference):
     return projected_point.firstPoint
 
 
-def decimal_degrees_to_dms(point):
+def decimal_degrees_to_dms(point: ArcPyPoint) -> tuple[str, str]:
     """Converts decimal degrees to degrees, minutes, and seconds (DMS) format.
 
     Transforms geographic coordinates from decimal degrees (DD) to the traditional
@@ -99,7 +123,7 @@ def decimal_degrees_to_dms(point):
     return lat_dms, lon_dms
 
 
-def calculate_grid_bearing(start_point, end_point, distance_meters):
+def calculate_grid_bearing(start_point: ArcPyPoint, end_point: ArcPyPoint, distance_meters: float) -> str:
     """Calculates grid bearing between two points in a projected coordinate system.
 
     Computes the bearing using Cartesian mathematics on projected coordinates
@@ -173,13 +197,12 @@ def calculate_grid_bearing(start_point, end_point, distance_meters):
     return bearing
 
 
-def meters_to_us_feet(meters):
+def meters_to_us_feet(meters: float) -> float:
     """Convert meters to US Survey Feet using the official conversion factor.
 
     Uses the conversion factor established by the Mendenhall Order of 1893,
     which defines 1 meter as exactly 3937/1200 US Survey Feet. This is the
-    standard conversion used in surveying and legal land descriptions in the
-    United States.
+    standard conversion used in surveying in the United States.
 
     Args:
         meters (float): Distance in meters to convert
@@ -190,7 +213,7 @@ def meters_to_us_feet(meters):
     return round(meters * 3937 / 1200, 1)
 
 
-def format_traversal(traversal_dict):
+def format_traversal(traversal_dict: dict[str, list[int]]) -> dict[str, list[int]]:
     """Formats PLSS section traversal data into human-readable form.
 
     Processes the raw traversal dictionary to create a formatted output that:
@@ -232,7 +255,7 @@ def format_traversal(traversal_dict):
     return formatted
 
 
-def get_disclaimer():
+def get_disclaimer() -> str:
     """Returns the legal disclaimer text for road centerline descriptions.
 
     Provides a comprehensive disclaimer that informs users about the limitations
@@ -266,7 +289,7 @@ By using the information contained herein, the User is stating that the above Di
 """
 
 
-def get_selected_polyline(feature_layer, unique_id):
+def get_selected_polyline(feature_layer: ArcPyFeatureLayer, unique_id: str) -> Optional[tuple[ArcPyPolyline, str]]:
     """Retrieves the first selected polyline and unique id from a feature layer.
 
     Args:
@@ -282,7 +305,9 @@ def get_selected_polyline(feature_layer, unique_id):
         return next(search_cursor, None)
 
 
-def get_plss_traversal(polyline, plss_sections, plss_schema):
+def get_plss_traversal(
+    polyline: ArcPyPolyline, plss_sections: ArcPyFeatureLayer, plss_schema: list[str]
+) -> dict[str, list[int]]:
     """Intersects a polyline with PLSS sections to determine traversal.
 
     Performs a spatial intersection between a polyline and PLSS sections layer
@@ -307,7 +332,6 @@ def get_plss_traversal(polyline, plss_sections, plss_schema):
 
     traversal = {}
 
-    # Intersect polyline with PLSS sections to determine traversal
     intersected = arcpy.analysis.Intersect(
         [plss_sections, polyline],
         "memory/sections",
@@ -321,10 +345,12 @@ def get_plss_traversal(polyline, plss_sections, plss_schema):
     return traversal
 
 
-def process_polyline(polyline, plss_sections, plss_schema):
-    """Processes a polyline to generate metes and bounds description data.
+def process_polyline(
+    polyline: ArcPyPolyline, plss_sections: ArcPyFeatureLayer, plss_schema: list[str]
+) -> DescriptionDict:
+    """Processes a polyline to generate centerline description data.
 
-    Analyzes a polyline geometry and generates comprehensive metes and bounds
+    Analyzes a polyline geometry and generates comprehensive centerline
     description information including PLSS section traversals, start/end coordinates
     in DMS format, and bearing/distance data for each segment. Coordinates are
     automatically projected to WGS84 for DMS output.
@@ -348,7 +374,12 @@ def process_polyline(polyline, plss_sections, plss_schema):
     """
     import arcpy
 
-    result = {"traversal": {}, "starting": "", "ending": "", "bearings": []}
+    result: DescriptionDict = {
+        "traversal": {},
+        "starting": {"lat": "", "lon": ""},
+        "ending": {"lat": "", "lon": ""},
+        "bearings": [],
+    }
 
     result["traversal"] = get_plss_traversal(polyline, plss_sections, plss_schema)
 
@@ -379,7 +410,7 @@ def process_polyline(polyline, plss_sections, plss_schema):
     return result
 
 
-def csv_has_header(csv_path, expected_fieldnames):
+def csv_has_header(csv_path: Path, expected_fieldnames: list[str]) -> bool:
     """Checks if a CSV file has the expected header row.
 
     Reads the first line of a CSV file and compares it with the expected
@@ -400,12 +431,12 @@ def csv_has_header(csv_path, expected_fieldnames):
         return False
 
 
-def save_description_to(description, unique_id, survey123, bearings):
-    """Saves centerline description data to CSV and bearing files.
+def save_description_to(description: DescriptionDict, unique_id: str, survey123: str, bearings: str) -> None:
+    """Saves centerline description data to CSV and a bearing file.
 
-    Appends description data to a Survey123 CSV file and writes bearing
+    Appends description data to a file ready to be imported to Survey123 CSV and writes bearing
     information to a separate text file. The CSV contains summary information
-    while detailed bearing data is stored in individual text files.
+    while detailed bearing data is stored in a text files.
 
     Args:
         description (dict): Description dictionary containing:
@@ -448,7 +479,6 @@ def save_description_to(description, unique_id, survey123, bearings):
     csv_path = Path(survey123)
     fieldnames = ["id", "starting", "ending", "traversal"]
 
-    # Check for header before opening file
     needs_header = not csv_has_header(csv_path, fieldnames)
 
     with csv_path.open(MODE_APPEND, newline=NEWLINE, encoding=ENCODING) as csv_file:

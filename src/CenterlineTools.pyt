@@ -267,7 +267,7 @@ class CenterlineDescribe:
 
         return
 
-    def _validate_centerline(self, parameter):
+    def _validate_centerline(self, parameter) -> None:
         """Validates the centerline input parameter.
 
         Ensures the selected feature layer:
@@ -311,7 +311,7 @@ class CenterlineDescribe:
         else:
             parameter.clearMessage()
 
-    def _validate_plss(self, parameter):
+    def _validate_plss(self, parameter) -> None:
         """Validates the PLSS section input parameter.
 
         Ensures the selected feature layer:
@@ -353,7 +353,7 @@ class CenterlineDescribe:
 
         return
 
-    def _validate_survey123_csv(self, parameter):
+    def _validate_survey123_csv(self, parameter) -> None:
         """Validates the Survey123 CSV input parameter.
 
         Ensures the selected file is a valid CSV file.

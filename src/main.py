@@ -16,7 +16,10 @@ These functions are designed to be unit testable and are imported by the
 ArcGIS Python Toolbox (CenterlineTools.pyt) for use in geoprocessing tools.
 """
 
+import csv
 import math
+from os import linesep
+from pathlib import Path
 
 MODE_APPEND = "a"
 MODE_WRITE = "w"
@@ -272,16 +275,11 @@ def get_selected_polyline(feature_layer, unique_id):
 
     Returns:
         tuple: (polyline, id) if a feature is found, or None if no features found
-
-    Raises:
-        StopIteration: If the cursor is empty (no features in the layer)
     """
     import arcpy
 
     with arcpy.da.SearchCursor(feature_layer, ["SHAPE@", unique_id]) as search_cursor:
-        row = next(search_cursor, (None, None))
-
-        return row
+        return next(search_cursor, None)
 
 
 def get_plss_traversal(polyline, plss_sections, plss_schema):
@@ -394,8 +392,6 @@ def csv_has_header(csv_path, expected_fieldnames):
     Returns:
         bool: True if the header is present and matches, False otherwise
     """
-    import csv
-
     try:
         with csv_path.open(encoding=ENCODING, newline=NEWLINE) as rf:
             first_row = next(csv.reader(rf))
@@ -413,7 +409,7 @@ def save_description_to(description, unique_id, survey123, bearings):
 
     Args:
         description (dict): Description dictionary containing:
-            - 'traversal': Dict from format_traversal() with meridian/township keys
+            - 'traversal': Dict mapping meridian/township keys to section lists
             - 'starting': Dict with 'lat' and 'lon' in DMS format
             - 'ending': Dict with 'lat' and 'lon' in DMS format
             - 'bearings': List of bearing strings
@@ -429,17 +425,14 @@ def save_description_to(description, unique_id, survey123, bearings):
 
     Example:
         >>> desc = {
-        ...     'traversal': {'Salt Lake Base and Meridian T01S R01W': [1, 2]},
+        ...     'traversal': {'26-T01S R01W': [1, 2]},
         ...     'starting': {'lat': '40°45\'30"N', 'lon': '111°52\'15"W'},
         ...     'ending': {'lat': '40°46\'00"N', 'lon': '111°53\'00"W'},
         ...     'bearings': ['N45°30\'15"E 328.1 ft', 'N50°20\'10"E 250.3 ft']
         ... }
         >>> save_description_to(desc, 'ROAD_001', '/path/to/output.csv', '/path/to/bearings')
+        # Creates CSV row with traversal: "Salt Lake Base and Meridian T01S R01W: Sections 1, 2"
     """
-    import csv
-    from os import linesep
-    from pathlib import Path
-
     starting_text = f"Latitude: {description['starting']['lat']} and Longitude: {description['starting']['lon']}"
     ending_text = f"Latitude: {description['ending']['lat']} and Longitude: {description['ending']['lon']}"
 
@@ -455,10 +448,13 @@ def save_description_to(description, unique_id, survey123, bearings):
     csv_path = Path(survey123)
     fieldnames = ["id", "starting", "ending", "traversal"]
 
+    # Check for header before opening file
+    needs_header = not csv_has_header(csv_path, fieldnames)
+
     with csv_path.open(MODE_APPEND, newline=NEWLINE, encoding=ENCODING) as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
 
-        if not csv_has_header(csv_path, fieldnames):
+        if needs_header:
             writer.writeheader()
 
         writer.writerow(

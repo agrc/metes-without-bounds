@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-__version__ = "1.0.1" # x-release-please-version
 __version__ = "1.0.1"  # x-release-please-version
 
 import arcpy
@@ -35,7 +34,7 @@ class Toolbox:
         self.label = "CenterlineTools"
         self.alias = "centerlinetools"
 
-        self.tools = [CenterlineDescribe, Update]
+        self.tools = [Survey123Export, CenterlineDescribe, Update]
 
 
 class CenterlineDescribe:
@@ -370,6 +369,112 @@ class CenterlineDescribe:
         if not csv_has_header(csv_path, fieldnames):
             parameter.setErrorMessage("The Survey123 file does not have the required header values.")
 
+        return
+
+
+class Survey123Export:
+    def __init__(self):
+        """Initializes the Survey123 Export geoprocessing tool.
+
+        This tool exports the centerline description results to a CSV file
+        formatted for use with Survey123 forms.
+        """
+        self.label = "Create Survey123 CSV"
+        self.description = "Create the CSV file required by the centerline describe tool"
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """No parameters required for this tool.
+
+        Returns:
+            list: Empty list as no parameters are needed
+        """
+
+        destination = arcpy.Parameter(
+            displayName="CSV Destination Parent Folder",
+            name="parent_folder",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Input",
+        )
+
+        return [destination]
+
+    def isLicensed(self):
+        """Tool is always licensed.
+
+        Returns:
+            bool: Always returns True
+        """
+        return True
+
+    def updateParameters(self, parameters):
+        """No parameters to update.
+
+        Args:
+            parameters (list): Empty list
+
+        Returns:
+            None
+        """
+        return
+
+    def updateMessages(self, parameters):
+        """No parameter validation needed.
+
+        Args:
+            parameters (list): Empty list
+
+        Returns:
+            None
+        """
+        from pathlib import Path
+
+        if not parameters[0].value:
+            parameters[0].clearMessage()
+
+            return
+
+        folder = Path(parameters[0].valueAsText)
+        csv_path = folder / SURVEY_FILENAME
+
+        if csv_path.exists():
+            parameters[0].setWarningMessage("The Survey123 file exists in this folder and will be overwritten.")
+
+        return
+
+    def execute(self, parameters, messages):
+        """Check for updates and install if available.
+
+        Queries the GitHub API for the latest release, compares versions,
+        and downloads/installs the update if a newer version is available.
+
+        Args:
+            parameters (list): Empty list (no parameters)
+            messages: ArcGIS messages object for user feedback
+        """
+        import csv
+        from pathlib import Path
+
+        folder = Path(parameters[0].valueAsText)
+        csv_path = folder / SURVEY_FILENAME
+
+        with csv_path.open(MODE_WRITE, newline=NEWLINE, encoding=ENCODING) as csv_file:
+            fieldnames = ["id", "starting", "ending", "traversal"]
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+
+            if not csv_has_header(csv_path, fieldnames):
+                writer.writeheader()
+
+    def postExecute(self, parameters):
+        """No post-execution operations needed.
+
+        Args:
+            parameters (list): Empty list
+
+        Returns:
+            None
+        """
         return
 
 

@@ -2,7 +2,15 @@
 
 __version__ = "1.0.1"  # x-release-please-version
 
+import csv
+import os
+import zipfile
+from io import BytesIO
+from pathlib import Path
+
 import arcpy
+import requests
+from packaging import version
 
 from main import (
     ENCODING,
@@ -203,7 +211,7 @@ class CenterlineDescribe:
 
         selected_row = get_selected_polyline(params["in_features"].value, params["in_unique_id"].valueAsText)
 
-        if selected_row is None or selected_row[0] is None:
+        if selected_row is None:
             messages.addErrorMessage("No features found in the selected layer.")
 
             return
@@ -247,9 +255,6 @@ class CenterlineDescribe:
         Returns:
             None
         """
-        import os
-        from pathlib import Path
-
         params = {p.name: p for p in parameters}
 
         if not params["in_bearing_destination"].value:
@@ -361,8 +366,6 @@ class CenterlineDescribe:
 
         parameter.clearMessage()
 
-        from pathlib import Path
-
         csv_path = Path(parameter.valueAsText)
 
         fieldnames = ["id", "starting", "ending", "traversal"]
@@ -428,8 +431,6 @@ class Survey123Export:
         Returns:
             None
         """
-        from pathlib import Path
-
         if not parameters[0].value:
             parameters[0].clearMessage()
 
@@ -453,9 +454,6 @@ class Survey123Export:
             parameters (list): Empty list (no parameters)
             messages: ArcGIS messages object for user feedback
         """
-        import csv
-        from pathlib import Path
-
         folder = Path(parameters[0].valueAsText)
         csv_path = folder / SURVEY_FILENAME
 
@@ -537,13 +535,6 @@ class Update:
             parameters (list): Empty list (no parameters)
             messages: ArcGIS messages object for user feedback
         """
-        import zipfile
-        from io import BytesIO
-        from pathlib import Path
-
-        import requests
-        from packaging import version
-
         repo_owner = "agrc"
         repo_name = "metes-without-bounds"
         current_version = __version__

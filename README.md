@@ -67,6 +67,32 @@ The tool requires two inputs:
 1. Using the ArcGIS Pro Debugger extension, attach to the ArcGIS Pro process
 1. Set breakpoints in VSCode and execute the tool in ArcGIS Pro from the Toolbox area of the Catalog pane
 
+### Toolbox Troubleshooting
+
+1. **Code changes are not making their way into the toolbox**
+
+   - Right-click the toolbox and choose **Refresh** or press <kbd>F5</kbd> with the toolbox selected.
+   - If the changes are in an imported module, then caching is likely the issue. Use this code to reload:
+
+   ```py
+   import sys
+   import importlib
+
+   # Add the src directory to Python path if not already there
+   src_path = r"C:\dev\metes-without-bounds\src"
+   if src_path not in sys.path:
+      sys.path.insert(0, src_path)
+
+   # Reload the main module
+   if 'main' in sys.modules:
+      importlib.reload(sys.modules['main'])
+
+   # Import the toolbox
+   arcpy.ImportToolbox(f"{src_path}\CenterlineTools.pyt")
+   ```
+
+   - **Best practice**: Restart ArcGIS Pro to ensure all changes are picked up cleanly.
+
 ## Testing
 
 1. Create a conda python virtual environment

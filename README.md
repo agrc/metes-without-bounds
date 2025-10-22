@@ -42,16 +42,20 @@ The tool requires two inputs:
 ### Running the tool
 
 1. In ArcGIS Pro, open the **Catalog pane**
-2. Right-click **Toolboxes** and select **Add Toolbox**
-3. Navigate to the extracted `CenterlineTools.pyt` file and select it
-4. Trust the code when prompted
-5. Expand **CenterlineTools** in the Catalog pane
-6. Double-click **Centerline Describe** to open the tool
-7. Select your parameters:
+1. Right-click **Toolboxes** and select **Add Toolbox**
+1. Navigate to the extracted `CenterlineTools.pyt` file and select it
+1. Trust the code when prompted
+1. Expand **CenterlineTools** in the Catalog pane
+1. Double-click **Create Survey123 CSV** and choose a location to store the traversal information.
+1. Click **Run**
+1. Double-click **Centerline Describe** to open the tool
+1. Select your parameters:
    - **Input Feature Layer**: Your centerline layer (with one feature selected)
+   - **Unique ID Field**: The field containing the unique identifier for the selected feature
    - **PLSS Section Reference Layer**: The PLSS sections layer
-8. Click **Run**
-9. Click **View Details** to see and copy the results
+   - **Survey123 Report CSV**: The CSV file created in step 6
+   - **Bearing Output Destination Folder**: The folder where bearing text files will be saved
+1. Click **Run**
 
 ### Troubleshooting
 

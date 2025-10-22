@@ -11,23 +11,55 @@ and generating descriptions. It includes functions for:
 - Distance conversions
 - PLSS section traversal formatting
 - Legal disclaimer text
+- Writing the results to files
 
 These functions are designed to be unit testable and are imported by the
 ArcGIS Python Toolbox (CenterlineTools.pyt) for use in geoprocessing tools.
 """
 
+import csv
 import math
+from os import linesep
+from pathlib import Path
+from typing import Any, Optional, TypedDict
 
+# Type aliases for arcpy types (arcpy doesn't provide type stubs)
+# Using Any here is intentional - these are duck-typed arcpy objects
+ArcPyPoint = Any  # arcpy.Point with X, Y attributes
+ArcPySpatialReference = Any  # arcpy.SpatialReference
+ArcPyPolyline = Any  # arcpy.Polyline geometry
+ArcPyFeatureLayer = Any  # arcpy feature layer or path
+
+
+class CoordinateDict(TypedDict):
+    """Dictionary containing lat/lon coordinates in DMS format."""
+
+    lat: str
+    lon: str
+
+
+class DescriptionDict(TypedDict):
+    """Dictionary containing centerline description data."""
+
+    traversal: dict[str, list[int]]
+    starting: CoordinateDict
+    ending: CoordinateDict
+    bearings: list[str]
+
+
+MODE_APPEND = "a"
+MODE_WRITE = "w"
+ENCODING = "utf-8"
+NEWLINE = ""
 QUOTE_CHAR = '"'
+FIELD_NAMES = ["id", "starting", "ending", "traversal"]
 
 
-def project_point(point, source_spatial_reference):
+def project_point(point: ArcPyPoint, source_spatial_reference: ArcPySpatialReference) -> ArcPyPoint:
     """Projects a point from one spatial reference system to WGS 84.
 
     Transforms a point's coordinates from its source spatial reference
     (e.g., UTM NAD83 Zone 12N) to a target spatial reference (e.g., WGS84).
-    This is commonly used to convert between projected coordinate systems
-    and geographic coordinate systems for latitude/longitude calculations.
 
     Args:
         point: The point to project with X and Y coordinates (arcpy.Point)
@@ -46,7 +78,7 @@ def project_point(point, source_spatial_reference):
     return projected_point.firstPoint
 
 
-def decimal_degrees_to_dms(point):
+def decimal_degrees_to_dms(point: ArcPyPoint) -> tuple[str, str]:
     """Converts decimal degrees to degrees, minutes, and seconds (DMS) format.
 
     Transforms geographic coordinates from decimal degrees (DD) to the traditional
@@ -92,7 +124,7 @@ def decimal_degrees_to_dms(point):
     return lat_dms, lon_dms
 
 
-def calculate_grid_bearing(start_point, end_point, distance_meters):
+def calculate_grid_bearing(start_point: ArcPyPoint, end_point: ArcPyPoint, distance_meters: float) -> str:
     """Calculates grid bearing between two points in a projected coordinate system.
 
     Computes the bearing using Cartesian mathematics on projected coordinates
@@ -166,13 +198,12 @@ def calculate_grid_bearing(start_point, end_point, distance_meters):
     return bearing
 
 
-def meters_to_us_feet(meters):
+def meters_to_us_feet(meters: float) -> float:
     """Convert meters to US Survey Feet using the official conversion factor.
 
     Uses the conversion factor established by the Mendenhall Order of 1893,
     which defines 1 meter as exactly 3937/1200 US Survey Feet. This is the
-    standard conversion used in surveying and legal land descriptions in the
-    United States.
+    standard conversion used in surveying in the United States.
 
     Args:
         meters (float): Distance in meters to convert
@@ -183,7 +214,7 @@ def meters_to_us_feet(meters):
     return round(meters * 3937 / 1200, 1)
 
 
-def format_traversal(traversal_dict):
+def format_traversal(traversal_dict: dict[str, list[int]]) -> dict[str, list[int]]:
     """Formats PLSS section traversal data into human-readable form.
 
     Processes the raw traversal dictionary to create a formatted output that:
@@ -225,7 +256,7 @@ def format_traversal(traversal_dict):
     return formatted
 
 
-def get_disclaimer():
+def get_disclaimer() -> str:
     """Returns the legal disclaimer text for road centerline descriptions.
 
     Provides a comprehensive disclaimer that informs users about the limitations
@@ -259,29 +290,25 @@ By using the information contained herein, the User is stating that the above Di
 """
 
 
-def get_selected_polyline(feature_layer):
-    """Retrieves the first selected polyline from a feature layer.
+def get_selected_polyline(feature_layer: ArcPyFeatureLayer, unique_id: str) -> Optional[tuple[ArcPyPolyline, str]]:
+    """Retrieves the first selected polyline and unique id from a feature layer.
 
     Args:
         feature_layer: The feature layer to read from (arcpy layer or path)
+        unique_id (str): The field name of the unique identifier for the feature
 
     Returns:
-        The first polyline geometry from the layer, or None if no features found
-
-    Raises:
-        StopIteration: If the cursor is empty (no features in the layer)
+        tuple: (polyline, id) if a feature is found, or None if no features found
     """
     import arcpy
 
-    with arcpy.da.SearchCursor(feature_layer, ["SHAPE@"]) as search_cursor:
-        row = next(search_cursor, None)
-        if row is None:
-            return None
-
-        return row[0]
+    with arcpy.da.SearchCursor(feature_layer, ["SHAPE@", unique_id]) as search_cursor:
+        return next(search_cursor, None)
 
 
-def get_plss_traversal(polyline, plss_sections, plss_schema):
+def get_plss_traversal(
+    polyline: ArcPyPolyline, plss_sections: ArcPyFeatureLayer, plss_schema: list[str]
+) -> dict[str, list[int]]:
     """Intersects a polyline with PLSS sections to determine traversal.
 
     Performs a spatial intersection between a polyline and PLSS sections layer
@@ -306,7 +333,6 @@ def get_plss_traversal(polyline, plss_sections, plss_schema):
 
     traversal = {}
 
-    # Intersect polyline with PLSS sections to determine traversal
     intersected = arcpy.analysis.Intersect(
         [plss_sections, polyline],
         "memory/sections",
@@ -320,10 +346,12 @@ def get_plss_traversal(polyline, plss_sections, plss_schema):
     return traversal
 
 
-def process_polyline(polyline, plss_sections, plss_schema):
-    """Processes a polyline to generate metes and bounds description data.
+def process_polyline(
+    polyline: ArcPyPolyline, plss_sections: ArcPyFeatureLayer, plss_schema: list[str]
+) -> DescriptionDict:
+    """Processes a polyline to generate centerline description data.
 
-    Analyzes a polyline geometry and generates comprehensive metes and bounds
+    Analyzes a polyline geometry and generates comprehensive centerline
     description information including PLSS section traversals, start/end coordinates
     in DMS format, and bearing/distance data for each segment. Coordinates are
     automatically projected to WGS84 for DMS output.
@@ -347,7 +375,12 @@ def process_polyline(polyline, plss_sections, plss_schema):
     """
     import arcpy
 
-    result = {"traversal": {}, "starting": "", "ending": "", "bearings": []}
+    result: DescriptionDict = {
+        "traversal": {},
+        "starting": {"lat": "", "lon": ""},
+        "ending": {"lat": "", "lon": ""},
+        "bearings": [],
+    }
 
     result["traversal"] = get_plss_traversal(polyline, plss_sections, plss_schema)
 
@@ -376,3 +409,100 @@ def process_polyline(polyline, plss_sections, plss_schema):
                 last_point = point
 
     return result
+
+
+def csv_has_header(csv_path: Path, expected_fieldnames: list[str]) -> bool:
+    """Checks if a CSV file has the expected header row.
+
+    Reads the first line of a CSV file and compares it with the expected
+    field names to determine if the header is present.
+
+    Args:
+        csv_path (Path): Path object to the CSV file
+        expected_fieldnames (list): List of expected field names
+
+    Returns:
+        bool: True if the header is present and matches, False otherwise
+    """
+    try:
+        with csv_path.open(encoding=ENCODING, newline=NEWLINE) as rf:
+            first_row = next(csv.reader(rf))
+            return first_row == expected_fieldnames
+    except (StopIteration, FileNotFoundError):
+        return False
+
+
+def save_description_to(description: DescriptionDict, unique_id: str, survey123: str, bearings: str) -> None:
+    """Saves centerline description data to CSV and a bearing file.
+
+    Appends description data to a file ready to be imported to Survey123 CSV and writes bearing
+    information to a separate text file. The CSV contains summary information
+    while detailed bearing data is stored in a text file.
+
+    Args:
+        description (dict): Description dictionary containing:
+            - 'traversal': Dict mapping meridian/township keys to section lists
+            - 'starting': Dict with 'lat' and 'lon' in DMS format
+            - 'ending': Dict with 'lat' and 'lon' in DMS format
+            - 'bearings': List of bearing strings
+        unique_id (str): Unique identifier for this centerline feature
+        survey123 (str): Path to the CSV file to append data to
+        bearings (str): Path to the folder where bearing text files are written
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If file operations fail (CSV write or bearing file write)
+
+    Example:
+        >>> desc = {
+        ...     'traversal': {'26-T01S R01W': [1, 2]},
+        ...     'starting': {'lat': '40°45\'30"N', 'lon': '111°52\'15"W'},
+        ...     'ending': {'lat': '40°46\'00"N', 'lon': '111°53\'00"W'},
+        ...     'bearings': ['N45°30\'15"E 328.1 ft', 'N50°20\'10"E 250.3 ft']
+        ... }
+        >>> save_description_to(desc, 'ROAD_001', '/path/to/output.csv', '/path/to/bearings')
+        # Creates CSV row with traversal: "Salt Lake Base and Meridian T01S R01W: Sections 1, 2"
+    """
+    starting_text = f"Latitude: {description['starting']['lat']} and Longitude: {description['starting']['lon']}"
+    ending_text = f"Latitude: {description['ending']['lat']} and Longitude: {description['ending']['lon']}"
+
+    formatted_traversal = format_traversal(description["traversal"])
+    traversal_lines = []
+
+    for meridian_township, sections in formatted_traversal.items():
+        sections_text = ", ".join(str(s) for s in sections)
+        traversal_lines.append(f"{meridian_township}: Sections {sections_text}")
+
+    traversal = " | ".join(traversal_lines)
+
+    csv_path = Path(survey123)
+
+    needs_header = not csv_has_header(csv_path, FIELD_NAMES)
+
+    with csv_path.open(MODE_APPEND, newline=NEWLINE, encoding=ENCODING) as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=FIELD_NAMES)
+
+        if needs_header:
+            writer.writeheader()
+
+        writer.writerow(
+            {
+                "id": unique_id,
+                "starting": starting_text,
+                "ending": ending_text,
+                "traversal": traversal,
+            }
+        )
+
+    bearings_folder = Path(bearings)
+    bearings_file = bearings_folder / f"{unique_id}_bearings.txt"
+
+    with bearings_file.open(MODE_WRITE, encoding=ENCODING) as f:
+        lines = (f"{i}. {bearing}{linesep}" for i, bearing in enumerate(description["bearings"], 1))
+        f.writelines(lines)
+
+    disclaimer = bearings_folder / "disclaimer.txt"
+    with disclaimer.open(MODE_WRITE, encoding=ENCODING) as f:
+        f.write(get_disclaimer())

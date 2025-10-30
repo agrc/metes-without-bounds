@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.2](https://github.com/agrc/metes-without-bounds/compare/v1.0.1...v1.0.2) (2025-10-30)
+
+
+### Features
+
+* create new tool to generate survey csv ([f47f818](https://github.com/agrc/metes-without-bounds/commit/f47f81891d821278697e12725b5d15086a14ac10))
+* save output to files ([6279b7f](https://github.com/agrc/metes-without-bounds/commit/6279b7f93f8fa0e367fe2e92e98ab1c4528a330c))
+
+
+### Documentation
+
+* add troubleshooting notice ([57fb685](https://github.com/agrc/metes-without-bounds/commit/57fb685125bcecb9c9607f4e2733e917296b6fb2))
+* add usage instructions ([40d0c5a](https://github.com/agrc/metes-without-bounds/commit/40d0c5a16c67456cde385baacc16e2173c66fd51))
+* update docs with new parameters and tool ([f0a1da5](https://github.com/agrc/metes-without-bounds/commit/f0a1da566ed44d1d26f543b4f04b2623ffdf806e))
+
 ## [1.0.1](https://github.com/agrc/metes-without-bounds/compare/v1.0.0...v1.0.1) (2025-10-15)
 
 

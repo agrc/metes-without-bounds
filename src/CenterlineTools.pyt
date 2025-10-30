@@ -65,7 +65,8 @@ class CenterlineDescribe:
         self.plss_schema = ["basemeridian", "label", "snum"]
 
         arcpy.env.overwriteOutput = True
-        arcpy.env.overwriteOutputOptions = "Truncate"
+        #: not available prior to 3.5 ish
+        # arcpy.env.overwriteOutputOptions = "Truncate"
 
     def isLicensed(self):
         """Determines if the tool is licensed to execute.

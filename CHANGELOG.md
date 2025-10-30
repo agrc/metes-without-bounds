@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/agrc/metes-without-bounds/compare/v1.0.2...v1.0.3) (2025-10-30)
+
+
+### Bug Fixes
+
+* remove unavailable arpy environment flag ([1453fea](https://github.com/agrc/metes-without-bounds/commit/1453fea24d3dd3ffc3edb855b13098d58880c1a0))
+
 ## [1.0.2](https://github.com/agrc/metes-without-bounds/compare/v1.0.1...v1.0.2) (2025-10-30)
 
 

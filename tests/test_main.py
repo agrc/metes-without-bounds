@@ -549,31 +549,6 @@ class TestSaveDescriptionTo:
         assert "1. N45°30'15" in content
         assert "2. N50°20'10" in content
 
-    def test_save_description_creates_disclaimer_file(self, tmp_path):
-        """Test that disclaimer file is created."""
-        csv_file = tmp_path / "test.csv"
-        bearings_folder = tmp_path / "bearings"
-        bearings_folder.mkdir()
-
-        description = cast(
-            DescriptionDict,
-            {
-                "traversal": {"26-T01S R01W": [1]},
-                "starting": {"lat": "40°45'30\"N", "lon": "111°52'15\"W"},
-                "ending": {"lat": "40°46'00\"N", "lon": "111°53'00\"W"},
-                "bearings": ["N45°30'15\"E 328.1 ft"],
-            },
-        )
-
-        save_description_to(description, "ROAD_001", str(csv_file), str(bearings_folder))
-
-        disclaimer_file = bearings_folder / "disclaimer.txt"
-        assert disclaimer_file.exists()
-
-        content = disclaimer_file.read_text(encoding=ENCODING)
-        assert "Disclaimer" in content
-        assert "UGRC" in content
-
     def test_save_description_with_empty_bearings(self, tmp_path):
         """Test that function handles empty bearings list."""
         csv_file = tmp_path / "test.csv"

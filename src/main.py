@@ -10,7 +10,6 @@ and generating descriptions. It includes functions for:
 - Grid bearing calculations
 - Distance conversions
 - PLSS section traversal formatting
-- Legal disclaimer text
 - Writing the results to files
 
 These functions are designed to be unit testable and are imported by the
@@ -256,40 +255,6 @@ def format_traversal(traversal_dict: dict[str, list[int]]) -> dict[str, list[int
     return formatted
 
 
-def get_disclaimer() -> str:
-    """Returns the legal disclaimer text for road centerline descriptions.
-
-    Provides a comprehensive disclaimer that informs users about the limitations
-    and proper use of the generated road centerline descriptions. The disclaimer
-    is displayed at the beginning of the tool's output and included in the tool
-    description.
-
-    The disclaimer covers:
-    - No warranties or certifications provided by UGRC
-    - Liability limitations for the State of Utah and County Governments
-    - User agreement and acceptance of terms
-    - Limitations on legal use (not for litigation or boundary disputes)
-    - Recommendation to consult attorneys or licensed surveyors for legal matters
-
-    Returns:
-        str: Multi-paragraph disclaimer text formatted for display in ArcGIS
-            geoprocessing tool messages and descriptions
-
-    Note:
-        This disclaimer is required for all road centerline descriptions to protect
-        the state of Utah and contributing agencies from legal liability related to
-        the use or misuse of automatically generated centerline descriptions.
-    """
-    return """Disclaimer
-
-No warranties or certification, express or implied, are provided for any and all road centerline descriptions provided by the Utah Geospatial Resource Center (UGRC). The following road centerline description has been compiled as a best effort service strictly for general purpose informational use and any interpretations made are the responsibility of the User.
-
-The state of Utah and County Governments, their elected officials, officers, employees, and agents assume no legal responsibilities for the information contained herein and shall have no liability for any damages, losses, costs, or expenses, including, but not limited to attorney's fees, arising from the use or misuses of the information provided herein. The User's use thereof shall constitute an agreement by the User to release The State of Utah and County Government, its elected officials, officers, employees, and agents from such liability.
-
-By using the information contained herein, the User is stating that the above Disclaimer has been read and that he/she has full understanding and is in agreement with the contents of this disclaimer. The road centerline information in this document was calculated and formatted using digital tools. The descriptions are NOT intended to be used for legal litigation, boundary disputes, or construction planning. These descriptions are for general reference or informational use only. Users interested in pursuing legal litigation and/or boundary disputes should consult an attorney or licensed surveyor, or both.
-"""
-
-
 def get_selected_polyline(feature_layer: ArcPyFeatureLayer, unique_id: str) -> Optional[tuple[ArcPyPolyline, str]]:
     """Retrieves the first selected polyline and unique id from a feature layer.
 
@@ -502,7 +467,3 @@ def save_description_to(description: DescriptionDict, unique_id: str, survey123:
     with bearings_file.open(MODE_WRITE, encoding=ENCODING) as f:
         lines = (f"{i}. {bearing}{linesep}" for i, bearing in enumerate(description["bearings"], 1))
         f.writelines(lines)
-
-    disclaimer = bearings_folder / "disclaimer.txt"
-    with disclaimer.open(MODE_WRITE, encoding=ENCODING) as f:
-        f.write(get_disclaimer())

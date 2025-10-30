@@ -23,7 +23,6 @@ from src.main import (
     csv_has_header,
     decimal_degrees_to_dms,
     format_traversal,
-    get_disclaimer,
     meters_to_us_feet,
     save_description_to,
 )
@@ -311,22 +310,6 @@ class TestFormatTraversal:
 
         assert "Unknown Meridian T05N R04E" in result
         assert result["Unknown Meridian T05N R04E"] == [7, 8, 9]
-
-
-class TestGetDisclaimer:
-    """Tests for disclaimer text."""
-
-    def test_get_disclaimer_returns_string(self):
-        """Test that disclaimer returns a string."""
-        result = get_disclaimer()
-        assert isinstance(result, str)
-
-    def test_get_disclaimer_is_multiline(self):
-        """Test that disclaimer is formatted with multiple lines/paragraphs."""
-        result = get_disclaimer()
-
-        # Should contain newlines for paragraph breaks
-        assert "\n" in result
 
 
 class TestCSVHasHeader:

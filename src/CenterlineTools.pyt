@@ -18,7 +18,6 @@ from main import (
     MODE_WRITE,
     NEWLINE,
     csv_has_header,
-    get_disclaimer,
     get_selected_polyline,
     process_polyline,
     save_description_to,
@@ -60,7 +59,7 @@ class CenterlineDescribe:
         - Computing grid bearings and distances in US Survey Feet
         """
         self.label = "Centerline Describe"
-        self.description = get_disclaimer() + "\nAn ArcGIS geoprocessing tool for describing a polyline feature."
+        self.description = "An ArcGIS geoprocessing tool for describing a polyline feature."
         self.canRunInBackground = False
         self.required_wkid = 26912  #: UTM NAD83 Zone 12 North
         self.plss_schema = ["basemeridian", "label", "snum"]
@@ -225,7 +224,6 @@ class CenterlineDescribe:
             self.plss_schema,
         )
 
-        messages.addMessage(get_disclaimer())
         messages.addMessage(f"\nSaving Survey123 results to {params['in_survey123_csv'].valueAsText}...")
         messages.addMessage(
             f"Saving bearing results to {Path(params['in_bearing_destination'].valueAsText) / f'{id}_bearings.txt'}..."
@@ -388,10 +386,15 @@ class Survey123Export:
         self.canRunInBackground = False
 
     def getParameterInfo(self):
-        """No parameters required for this tool.
+        """Return the parameter definition for this tool.
+
+        This tool requires a single parameter:
+
+        - `parent_folder` (DEFolder, Required): The destination folder where
+          the Survey123 CSV file will be created.
 
         Returns:
-            list: Empty list as no parameters are needed
+            list[arcpy.Parameter]: A list containing the folder parameter.
         """
 
         destination = arcpy.Parameter(

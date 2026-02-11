@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/agrc/metes-without-bounds/compare/v1.0.3...v1.0.4) (2026-02-11)
+
+
+### Dependencies
+
+* **dev:** bump ruff in the safe-dependencies group ([95013bf](https://github.com/agrc/metes-without-bounds/commit/95013bf66899ba4c885a781276dcbcbb8de4c506))
+
 ## [1.0.3](https://github.com/agrc/metes-without-bounds/compare/v1.0.2...v1.0.3) (2025-10-30)
 
 

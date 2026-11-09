@@ -7,6 +7,8 @@ Tests coordinate conversions, bearing calculations, and formatting functions.
 """
 
 import csv
+import sys
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -22,8 +24,12 @@ from src.main import (
     calculate_grid_bearing,
     csv_has_header,
     decimal_degrees_to_dms,
+    describe_plss_corner,
+    format_cartesian_corner_tie,
     format_traversal,
+    get_nearest_calculated_corner,
     meters_to_us_feet,
+    process_polyline,
     save_description_to,
 )
 
@@ -312,6 +318,293 @@ class TestFormatTraversal:
         assert result["Unknown Meridian T05N R04E"] == [7, 8, 9]
 
 
+class TestCalculatedCornerTie:
+    """Tests for finding and describing the corner tie."""
+
+    def test_format_cartesian_corner_tie_uses_north_and_east_offsets(self):
+        result = format_cartesian_corner_tie(
+            (1000.0, 2000.0),
+            MockPoint(1091.44, 2152.4),
+            "500640",
+            (SimpleNamespace(centroid=MockPoint(2000.0, 2000.0)), "26", "T01S R01W", 12),
+        )
+
+        assert result == (
+            "Beginning at the West 1/4 corner of Section 12, "
+            "Salt Lake Base and Meridian T01S R01W; thence 500 ft north and "
+            "300 ft east to the centerline's first vertex."
+        )
+        assert "583" not in result
+
+    def test_format_cartesian_corner_tie_uses_south_and_west_offsets(self):
+        result = format_cartesian_corner_tie(
+            (1000.0, 2000.0),
+            MockPoint(908.56, 1847.6),
+            "540640",
+            (SimpleNamespace(centroid=MockPoint(0.0, 0.0)), "30", "T02N R03E", 4),
+        )
+
+        assert "500 ft south and 300 ft west" in result
+        assert "center 1/4 corner of Section 4" in result
+
+    @pytest.mark.parametrize(
+        ("point_label", "point_xy", "expected"),
+        [
+            ("500600", (0.0, 10.0), "NW corner"),
+            ("500600", (10.0, 0.0), "SE corner"),
+            ("540600", (0.0, 10.0), "North 1/4 corner"),
+            ("540600", (0.0, -10.0), "South 1/4 corner"),
+            ("500640", (-10.0, 0.0), "West 1/4 corner"),
+            ("500640", (10.0, 0.0), "East 1/4 corner"),
+            ("540640", (0.0, 0.0), "center 1/4 corner"),
+            ("640", (-10.0, 0.0), "West 1/4 corner"),
+        ],
+    )
+    def test_describe_plss_corner_uses_gcdb_point_id_and_section_centroid(self, point_label, point_xy, expected):
+        section_geometry = SimpleNamespace(centroid=MockPoint(0.0, 0.0))
+
+        assert describe_plss_corner(point_xy, point_label, section_geometry) == expected
+
+    def test_describe_plss_corner_rejects_unrecognized_point_id(self):
+        section_geometry = SimpleNamespace(centroid=MockPoint(0.0, 0.0))
+
+        with pytest.raises(ValueError, match="six-digit point ID"):
+            describe_plss_corner((0.0, 0.0), "invalid", section_geometry)
+
+    def test_get_nearest_calculated_corner_filters_candidates(self, monkeypatch):
+        calls = []
+        existing_items = set()
+
+        class FakeInsertCursor:
+            def __init__(self, layer, fields):
+                calls.append(("insert_cursor", layer, fields))
+
+            def __enter__(self):
+                return self
+
+            def insertRow(self, row):
+                calls.append(("insert_row", row))
+
+            def __exit__(self, *_args):
+                return False
+
+        class FakeSearchCursor:
+            def __init__(self, layer, fields, where_clause=None):
+                calls.append(("search_cursor", layer, fields, where_clause))
+                self.rows = [(42,)] if layer.startswith("memory/nearest_corner_") else [((3.0, 4.0), "nearest")]
+
+            def __enter__(self):
+                return iter(self.rows)
+
+            def __exit__(self, *_args):
+                return False
+
+        def create_feature_class(workspace, name, geometry_type, spatial_reference):
+            calls.append(("create_feature_class", workspace, name, geometry_type, spatial_reference))
+            existing_items.add(f"{workspace}/{name}")
+
+        def make_feature_layer(_points, name, where_clause):
+            calls.append(("make_feature_layer", name, where_clause))
+            existing_items.add(name)
+
+        def generate_near_table(input_features, near_features, output_table, **kwargs):
+            calls.append(("generate_near_table", input_features, near_features, output_table, kwargs))
+            existing_items.add(output_table)
+
+        def delete(item):
+            calls.append(("delete", item))
+            existing_items.remove(item)
+
+        fake_arcpy = SimpleNamespace(
+            PointGeometry=lambda point, _sr: point,
+            Describe=lambda _layer: SimpleNamespace(OIDFieldName="OBJECTID"),
+            Exists=lambda item: item in existing_items,
+            management=SimpleNamespace(
+                CreateFeatureclass=create_feature_class,
+                MakeFeatureLayer=make_feature_layer,
+                Delete=delete,
+            ),
+            analysis=SimpleNamespace(GenerateNearTable=generate_near_table),
+            da=SimpleNamespace(InsertCursor=FakeInsertCursor, SearchCursor=FakeSearchCursor),
+        )
+        monkeypatch.setitem(sys.modules, "arcpy", fake_arcpy)
+
+        spatial_reference = object()
+        result = get_nearest_calculated_corner(MockPoint(3.0, 3.0), "plss_points", spatial_reference)
+
+        assert result == ((3.0, 4.0), "nearest")
+        candidate_layer, where_clause = next(call[1:3] for call in calls if call[0] == "make_feature_layer")
+        assert candidate_layer.startswith("calculated_corner_candidates_")
+        assert "pointlab LIKE '%00%00'" in where_clause
+        assert "pointlab LIKE '%40%40'" in where_clause
+        assert "pointlab LIKE '%00%40'" in where_clause
+        assert "pointlab LIKE '%40%00'" in where_clause
+        near_call = next(call for call in calls if call[0] == "generate_near_table")
+        assert near_call[1].startswith("memory/centerline_start_")
+        assert near_call[2] == candidate_layer
+        assert near_call[4] == {"closest": "CLOSEST", "method": "PLANAR"}
+        assert not existing_items
+
+    def test_get_nearest_calculated_corner_raises_when_no_candidates(self, monkeypatch):
+        existing_items = set()
+
+        class FakeInsertCursor:
+            def __init__(self, *_args):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def insertRow(self, _row):
+                return
+
+            def __exit__(self, *_args):
+                return False
+
+        class FakeSearchCursor:
+            def __init__(self, *_args):
+                pass
+
+            def __enter__(self):
+                return iter([])
+
+            def __exit__(self, *_args):
+                return False
+
+        def create_feature_class(workspace, name, *_args, **_kwargs):
+            existing_items.add(f"{workspace}/{name}")
+
+        def make_feature_layer(_points, name, _where_clause):
+            existing_items.add(name)
+
+        def generate_near_table(_input, _candidates, output_table, **_kwargs):
+            existing_items.add(output_table)
+
+        def delete(item):
+            existing_items.remove(item)
+
+        fake_arcpy = SimpleNamespace(
+            PointGeometry=lambda point, _sr: point,
+            Exists=lambda item: item in existing_items,
+            management=SimpleNamespace(
+                CreateFeatureclass=create_feature_class,
+                MakeFeatureLayer=make_feature_layer,
+                Delete=delete,
+            ),
+            analysis=SimpleNamespace(GenerateNearTable=generate_near_table),
+            da=SimpleNamespace(InsertCursor=FakeInsertCursor, SearchCursor=FakeSearchCursor),
+        )
+        monkeypatch.setitem(sys.modules, "arcpy", fake_arcpy)
+
+        with pytest.raises(ValueError, match="No calculated quarter"):
+            get_nearest_calculated_corner(MockPoint(0.0, 0.0), "plss_points", object())
+        assert not existing_items
+
+    @pytest.mark.parametrize("start_on_boundary", [False, True])
+    def test_process_polyline_prepends_corner_tie_and_keeps_centerline_start(self, monkeypatch, start_on_boundary):
+        centerline_points = [MockPoint(1091.44, 2152.4), MockPoint(1191.44, 2152.4)]
+
+        class FakeGeometry:
+            def __init__(self, point):
+                self.firstPoint = point
+
+            def projectAs(self, _spatial_reference):
+                return self
+
+            def contains(self, _point):
+                return True
+
+        class FakeSection:
+            centroid = MockPoint(2000.0, 2000.0)
+
+            def contains(self, point):
+                return not start_on_boundary or point.firstPoint.X > centerline_points[0].X + 0.01
+
+        class FakePolyline:
+            spatialReference = object()
+
+            def __iter__(self):
+                return iter([centerline_points])
+
+        class FakeSegment:
+            def __init__(self, points, _spatial_reference):
+                self.firstPoint = points[0]
+                self.lastPoint = points[-1]
+                self.length = 100.0
+
+        class FakeCursor:
+            def __init__(self, layer, fields, **_kwargs):
+                if layer == "intersected":
+                    self.rows = [("26", "T01S R01W", 12)]
+                elif fields == ["SHAPE@XY", "pointlab"]:
+                    self.rows = [((1000.0, 2000.0), "500640")]
+                elif layer.startswith("memory/nearest_corner_"):
+                    self.rows = [(42,)]
+                else:
+                    self.rows = [(FakeSection(), "26", "T01S R01W", 12)]
+
+            def __enter__(self):
+                return iter(self.rows)
+
+            def __exit__(self, *_args):
+                return False
+
+        class FakeInsertCursor:
+            def __init__(self, *_args):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def insertRow(self, _row):
+                return
+
+            def __exit__(self, *_args):
+                return False
+
+        temporary_items = set()
+
+        def create_feature_class(workspace, name, *_args, **_kwargs):
+            temporary_items.add(f"{workspace}/{name}")
+
+        def make_feature_layer(_points, name, _where_clause):
+            temporary_items.add(name)
+
+        def generate_near_table(_input, _candidates, output_table, **_kwargs):
+            temporary_items.add(output_table)
+
+        def delete(item):
+            temporary_items.remove(item)
+
+        fake_arcpy = SimpleNamespace(
+            Point=MockPoint,
+            PointGeometry=lambda point, _spatial_reference: FakeGeometry(point),
+            SpatialReference=lambda _wkid: object(),
+            Array=list,
+            Polyline=FakeSegment,
+            analysis=SimpleNamespace(
+                Intersect=lambda *_args, **_kwargs: "intersected",
+                GenerateNearTable=generate_near_table,
+            ),
+            management=SimpleNamespace(
+                CreateFeatureclass=create_feature_class,
+                MakeFeatureLayer=make_feature_layer,
+                Delete=delete,
+            ),
+            Describe=lambda _layer: SimpleNamespace(OIDFieldName="OBJECTID"),
+            Exists=lambda item: item in temporary_items,
+            da=SimpleNamespace(InsertCursor=FakeInsertCursor, SearchCursor=FakeCursor),
+        )
+        monkeypatch.setitem(sys.modules, "arcpy", fake_arcpy)
+
+        result = process_polyline(FakePolyline(), "plss_sections", "plss_points", ["basemeridian", "label", "snum"])
+
+        assert result["starting"] == dict(zip(("lat", "lon"), decimal_degrees_to_dms(centerline_points[0])))
+        assert result["bearings"][0].startswith("Beginning at the West 1/4 corner of Section 12")
+        assert "500 ft north and 300 ft east" in result["bearings"][0]
+        assert result["bearings"][1].endswith("328.1 ft")
+
+
 class TestCSVHasHeader:
     """Tests for CSV header detection."""
 
@@ -435,6 +728,33 @@ class TestConstants:
 
 class TestSaveDescriptionTo:
     """Tests for save_description_to function."""
+
+    def test_save_description_keeps_corner_tie_before_centerline_courses(self, tmp_path):
+        csv_file = tmp_path / "test.csv"
+        bearings_folder = tmp_path / "bearings"
+        bearings_folder.mkdir()
+        description = cast(
+            DescriptionDict,
+            {
+                "traversal": {"26-T01S R01W": [12]},
+                "starting": {"lat": "40°45'30\"N", "lon": "111°52'15\"W"},
+                "ending": {"lat": "40°46'00\"N", "lon": "111°53'00\"W"},
+                "bearings": [
+                    "Beginning at calculated PLSS corner NW1/4 of Section 12; thence 500 ft north and 300 ft east to the centerline's first vertex.",
+                    "N45°30'15\"E 328.1 ft",
+                ],
+            },
+        )
+
+        save_description_to(description, "ROAD_001", str(csv_file), str(bearings_folder))
+
+        with csv_file.open(encoding=ENCODING, newline=NEWLINE) as csv_file_handle:
+            row = next(csv.DictReader(csv_file_handle))
+        lines = (bearings_folder / "ROAD_001_bearings.txt").read_text(encoding=ENCODING).splitlines()
+
+        assert row["starting"] == "Latitude: 40°45'30\"N and Longitude: 111°52'15\"W"
+        assert lines[0].startswith("1. Beginning at calculated PLSS corner")
+        assert lines[1] == "2. N45°30'15\"E 328.1 ft"
 
     def test_save_description_creates_csv_with_header(self, tmp_path):
         """Test that function creates CSV file with proper header."""

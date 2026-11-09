@@ -17,6 +17,7 @@ ArcGIS Python Toolbox (CenterlineTools.pyt) for use in geoprocessing tools.
 import csv
 import math
 from pathlib import Path
+from time import perf_counter
 from typing import Any, TypedDict
 from uuid import uuid4
 
@@ -391,7 +392,7 @@ def get_sections_at_point(
         spatial_relationship="INTERSECTS",
     ) as cursor:
         for geometry, base_meridian, label, section in cursor:
-            if geometry.intersects(point_geometry):
+            if not geometry.disjoint(point_geometry):
                 sections.append((geometry, base_meridian, label, section))
 
     return sections

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# * coding: utf8 *
 """
 Centerline description logic module.
 
@@ -19,7 +17,7 @@ ArcGIS Python Toolbox (CenterlineTools.pyt) for use in geoprocessing tools.
 import csv
 import math
 from pathlib import Path
-from typing import Any, Optional, TypedDict
+from typing import Any, TypedDict
 from uuid import uuid4
 
 # Type aliases for arcpy types (arcpy doesn't provide type stubs)
@@ -191,7 +189,7 @@ def calculate_grid_bearing(start_point: ArcPyPoint, end_point: ArcPyPoint, dista
     degrees = int(angle)
     minutes_float = (angle - degrees) * 60
     minutes = int(minutes_float)
-    seconds = int(round(((minutes_float - minutes) * 60)))
+    seconds = round((minutes_float - minutes) * 60)
 
     distance_feet = meters_to_us_feet(distance_meters)
 
@@ -258,7 +256,7 @@ def _format_base_meridian(base_meridian: str) -> str:
     return "Unknown Meridian"
 
 
-def get_selected_polyline(feature_layer: ArcPyFeatureLayer, unique_id: str) -> Optional[tuple[ArcPyPolyline, str]]:
+def get_selected_polyline(feature_layer: ArcPyFeatureLayer, unique_id: str) -> tuple[ArcPyPolyline, str] | None:
     """Retrieves the first selected polyline and unique id from a feature layer.
 
     Args:

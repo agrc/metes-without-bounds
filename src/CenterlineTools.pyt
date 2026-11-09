@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 __version__ = "1.0.4"  # x-release-please-version
 
 import csv
@@ -210,8 +208,6 @@ class CenterlineDescribe:
         self._validate_plss(params["in_plss"])
         self._validate_plss_points(params["in_plss_points"])
         self._validate_survey123_csv(params["in_survey123_csv"])
-
-        return
 
     def execute(self, parameters, messages):
         """Process polyline to generate descriptions.
@@ -673,11 +669,11 @@ class Update:
         except requests.exceptions.Timeout:
             messages.addErrorMessage("Request timed out. Please try again later.")
         except requests.exceptions.RequestException as e:
-            messages.addErrorMessage(f"Request error: {str(e)}")
+            messages.addErrorMessage(f"Request error: {e!s}")
         except zipfile.BadZipFile:
             messages.addErrorMessage("Downloaded file is not a valid zip archive.")
-        except Exception as e:
-            messages.addErrorMessage(f"Unexpected error: {str(e)}")
+        except (KeyError, OSError, ValueError, zipfile.LargeZipFile) as e:
+            messages.addErrorMessage(f"Invalid release data or update file error: {e!s}")
 
     def postExecute(self, parameters):
         """No post-execution operations needed.

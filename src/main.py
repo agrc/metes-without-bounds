@@ -329,16 +329,20 @@ def get_nearest_calculated_corner(
     temporary_layers = []
 
     try:
+        arcpy.AddMessage("Creating a temporary point at the centerline's first vertex...")
         temporary_data.append(start_feature)
         arcpy.management.CreateFeatureclass("memory", start_name, "POINT", spatial_reference=spatial_reference)
 
         with arcpy.da.InsertCursor(start_feature, ["SHAPE@"]) as cursor:
             cursor.insertRow([arcpy.PointGeometry(point, spatial_reference)])
 
+        arcpy.AddMessage("Filtering PLSS points to eligible calculated corners...")
         arcpy.management.MakeFeatureLayer(plss_points, candidate_layer, CORNER_WHERE_CLAUSE)
         temporary_layers.append(candidate_layer)
 
         temporary_data.append(near_table)
+        arcpy.AddMessage("Finding the nearest calculated corner with Generate Near Table...")
+        near_started = perf_counter()
         arcpy.analysis.GenerateNearTable(
             start_feature,
             candidate_layer,
@@ -346,7 +350,9 @@ def get_nearest_calculated_corner(
             closest="CLOSEST",
             method="PLANAR",
         )
+        arcpy.AddMessage(f"Generate Near Table completed in {perf_counter() - near_started:.1f} seconds.")
 
+        arcpy.AddMessage("Reading the nearest calculated corner's coordinates and label...")
         with arcpy.da.SearchCursor(near_table, ["NEAR_FID"]) as cursor:
             nearest_row = next(cursor, None)
 
@@ -361,11 +367,14 @@ def get_nearest_calculated_corner(
         if nearest_corner is None:
             raise ValueError("The nearest calculated corner could not be read from the PLSS points layer.")
 
+        arcpy.AddMessage(f"Nearest calculated corner found: GCDB {nearest_corner[1]}.")
         return nearest_corner
     finally:
+        arcpy.AddMessage("Cleaning up temporary nearest-corner datasets...")
         for temporary_item in reversed(temporary_layers + temporary_data):
             if arcpy.Exists(temporary_item):
                 arcpy.management.Delete(temporary_item)
+        arcpy.AddMessage("Temporary nearest-corner datasets cleaned up.")
 
 
 def get_sections_at_point(
@@ -554,7 +563,9 @@ def process_polyline(
         "bearings": [],
     }
 
+    arcpy.AddMessage("Intersecting the centerline with PLSS sections...")
     result["traversal"] = get_plss_traversal(polyline, plss_sections, plss_schema)
+    arcpy.AddMessage("PLSS section traversal calculated.")
 
     first_path = next((path for path in polyline if len(path)), None)
     if first_path is None:
@@ -566,18 +577,22 @@ def process_polyline(
         plss_points,
         polyline.spatialReference,
     )
+    arcpy.AddMessage("Determining the starting PLSS section and resolving shared boundaries...")
     start_section = get_section_for_centerline_start(
         first_path,
         polyline.spatialReference,
         plss_sections,
         plss_schema,
     )
+    arcpy.AddMessage(f"Starting PLSS section selected: {start_section[2]}, Section {start_section[3]}.")
 
+    arcpy.AddMessage("Projecting the starting coordinate and formatting the corner tie...")
     projected_start = project_point(first_point, polyline.spatialReference)
     start_lat, start_lon = decimal_degrees_to_dms(projected_start)
     result["starting"] = {"lat": start_lat, "lon": start_lon}
     result["bearings"].append(format_cartesian_corner_tie(nearest_corner, first_point, point_label, start_section))
 
+    arcpy.AddMessage("Calculating centerline coordinates, bearings, and distances...")
     for path in polyline:
         last_point = None
         for index, point in enumerate(path):
@@ -601,6 +616,7 @@ def process_polyline(
 
                 last_point = point
 
+    arcpy.AddMessage(f"Calculated {len(result['bearings']) - 1} centerline courses.")
     return result
 
 

@@ -222,6 +222,7 @@ class CenterlineDescribe:
         # Access parameters by name for clarity and maintainability
         params = {p.name: p for p in parameters}
 
+        messages.addMessage("Reading the selected centerline...")
         selected_row = get_selected_polyline(params["in_features"].value, params["in_unique_id"].valueAsText)
 
         if selected_row is None:
@@ -230,6 +231,7 @@ class CenterlineDescribe:
             return
 
         polyline, id = selected_row
+        messages.addMessage(f"Processing centerline {id}...")
 
         try:
             result = process_polyline(
@@ -250,6 +252,7 @@ class CenterlineDescribe:
         save_description_to(
             result, id, params["in_survey123_csv"].valueAsText, params["in_bearing_destination"].valueAsText
         )
+        messages.addMessage("Centerline description and Survey123 results saved.")
 
     def postExecute(self, parameters):
         """Performs cleanup or post-processing after tool execution completes.

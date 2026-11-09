@@ -389,9 +389,9 @@ class TestCalculatedCornerTie:
                 self.section_number = section_number
                 self.centroid = MockPoint((min_x + max_x) / 2, 0.0)
 
-            def intersects(self, point_geometry):
+            def disjoint(self, point_geometry):
                 point = point_geometry.firstPoint
-                return self.min_x <= point.X <= self.max_x and -100 <= point.Y <= 100
+                return not (self.min_x <= point.X <= self.max_x and -100 <= point.Y <= 100)
 
             def contains(self, point_geometry):
                 point = point_geometry.firstPoint
@@ -406,7 +406,7 @@ class TestCalculatedCornerTie:
 
         class FakeCursor:
             def __init__(self, _layer, _fields, *, spatial_filter, **_kwargs):
-                self.rows = [row for row in reversed(section_rows) if row[0].intersects(spatial_filter)]
+                self.rows = [row for row in reversed(section_rows) if not row[0].disjoint(spatial_filter)]
 
             def __enter__(self):
                 return iter(self.rows)
@@ -438,8 +438,8 @@ class TestCalculatedCornerTie:
                 self.section_number = section_number
                 self.centroid = MockPoint(0.0, 0.0)
 
-            def intersects(self, _point_geometry):
-                return True
+            def disjoint(self, _point_geometry):
+                return False
 
             def contains(self, _point_geometry):
                 return False
@@ -523,6 +523,7 @@ class TestCalculatedCornerTie:
             existing_items.remove(item)
 
         fake_arcpy = SimpleNamespace(
+            AddMessage=lambda message: calls.append(("message", message)),
             PointGeometry=lambda point, _sr: point,
             Describe=lambda _layer: SimpleNamespace(OIDFieldName="OBJECTID"),
             Exists=lambda item: item in existing_items,
@@ -550,10 +551,19 @@ class TestCalculatedCornerTie:
         assert near_call[1].startswith("memory/centerline_start_")
         assert near_call[2] == candidate_layer
         assert near_call[4] == {"closest": "CLOSEST", "method": "PLANAR"}
+        near_index = calls.index(near_call)
+        assert calls[near_index - 1] == (
+            "message",
+            "Finding the nearest calculated corner with Generate Near Table...",
+        )
+        assert calls[near_index + 1][0] == "message"
+        assert calls[near_index + 1][1].startswith("Generate Near Table completed in ")
+        assert calls[-1] == ("message", "Temporary nearest-corner datasets cleaned up.")
         assert not existing_items
 
     def test_get_nearest_calculated_corner_raises_when_no_candidates(self, monkeypatch):
         existing_items = set()
+        messages = []
 
         class FakeInsertCursor:
             def __init__(self, *_args):
@@ -591,6 +601,7 @@ class TestCalculatedCornerTie:
             existing_items.remove(item)
 
         fake_arcpy = SimpleNamespace(
+            AddMessage=messages.append,
             PointGeometry=lambda point, _sr: point,
             Exists=lambda item: item in existing_items,
             management=SimpleNamespace(
@@ -606,6 +617,8 @@ class TestCalculatedCornerTie:
         with pytest.raises(ValueError, match="No calculated quarter"):
             get_nearest_calculated_corner(MockPoint(0.0, 0.0), "plss_points", object())
         assert not existing_items
+        assert messages[-1] == "Temporary nearest-corner datasets cleaned up."
+        assert not any(message.startswith("Nearest calculated corner found:") for message in messages)
 
     @pytest.mark.parametrize("start_on_boundary", [False, True])
     def test_process_polyline_prepends_corner_tie_and_keeps_centerline_start(self, monkeypatch, start_on_boundary):
@@ -624,8 +637,8 @@ class TestCalculatedCornerTie:
         class FakeSection:
             centroid = MockPoint(2000.0, 2000.0)
 
-            def intersects(self, _point):
-                return True
+            def disjoint(self, _point):
+                return False
 
             def contains(self, point):
                 return not start_on_boundary or point.firstPoint.X > centerline_points[0].X + 0.01
@@ -686,7 +699,9 @@ class TestCalculatedCornerTie:
         def delete(item):
             temporary_items.remove(item)
 
+        messages = []
         fake_arcpy = SimpleNamespace(
+            AddMessage=messages.append,
             Point=MockPoint,
             PointGeometry=lambda point, _spatial_reference: FakeGeometry(point),
             SpatialReference=lambda _wkid: object(),
@@ -713,6 +728,11 @@ class TestCalculatedCornerTie:
         assert result["bearings"][0].startswith("Beginning at the West 1/4 corner of Section 12")
         assert "500 ft north and 300 ft east" in result["bearings"][0]
         assert result["bearings"][1].endswith("328.1 ft")
+        assert messages[0] == "Intersecting the centerline with PLSS sections..."
+        assert "PLSS section traversal calculated." in messages
+        assert "Determining the starting PLSS section and resolving shared boundaries..." in messages
+        assert "Calculating centerline coordinates, bearings, and distances..." in messages
+        assert messages[-1] == "Calculated 1 centerline courses."
 
 
 class TestCSVHasHeader:

@@ -54,6 +54,7 @@ class CenterlineDescribe:
         reference systems, PLSS schema, and ArcGIS environment settings.
 
         The tool generates descriptions for road centerlines by:
+        - Tying the centerline start to the nearest calculated PLSS corner
         - Calculating PLSS section traversals
         - Converting coordinates to DMS format
         - Computing grid bearings and distances in US Survey Feet
@@ -88,7 +89,7 @@ class CenterlineDescribe:
         """Defines the input parameters for the geoprocessing tool.
 
         Creates and configures the parameter objects that appear in the tool's
-        dialog box in ArcGIS. This tool requires two input parameters:
+        dialog box in ArcGIS. This tool requires three input layers:
 
         1. Input Feature Layer: A polyline layer representing the road centerline
            - Must have exactly one feature selected
@@ -98,10 +99,13 @@ class CenterlineDescribe:
            - Must contain fields: basemeridian, label, snum
            - Must use UTM NAD83 Zone 12 North projection (EPSG:26912)
 
+        3. PLSS Point GCDB Layer: A point layer containing calculated corners
+           - Must contain the POINTLAB field
+           - Must use UTM NAD83 Zone 12 North projection (EPSG:26912)
+
         Returns:
-            list[arcpy.Parameter]: A list of two Parameter objects:
-                - parameters[0]: Input polyline feature layer
-                - parameters[1]: PLSS section polygon reference layer
+            list[arcpy.Parameter]: The centerline, unique ID, PLSS section,
+                PLSS point, Survey123 CSV, and bearing destination parameters.
 
         Note:
             Parameters are validated in the updateMessages() method to ensure
@@ -138,6 +142,16 @@ class CenterlineDescribe:
 
         plss_sections.filter.list = ["Polygon"]  # pyright: ignore[reportOptionalMemberAccess]
 
+        plss_points = arcpy.Parameter(
+            displayName="PLSS Calculated Monument Points Layer",
+            name="in_plss_points",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input",
+        )
+
+        plss_points.filter.list = ["Point"]  # pyright: ignore[reportOptionalMemberAccess]
+
         survey123_csv = arcpy.Parameter(
             displayName="Survey123 Report CSV",
             name="in_survey123_csv",
@@ -156,7 +170,7 @@ class CenterlineDescribe:
             direction="Input",
         )
 
-        return [input_data, unique_id, plss_sections, survey123_csv, bearing_destination]
+        return [input_data, unique_id, plss_sections, plss_points, survey123_csv, bearing_destination]
 
     def updateParameters(self, parameters):
         """Updates parameter values and properties dynamically based on user input.
@@ -194,6 +208,7 @@ class CenterlineDescribe:
 
         self._validate_centerline(params["in_features"])
         self._validate_plss(params["in_plss"])
+        self._validate_plss_points(params["in_plss_points"])
         self._validate_survey123_csv(params["in_survey123_csv"])
 
         return
@@ -201,11 +216,12 @@ class CenterlineDescribe:
     def execute(self, parameters, messages):
         """Process polyline to generate descriptions.
 
-        Reads polyline geometry, intersects them with SGID section
+        Reads polyline geometry, intersects it with SGID section
         reference data, and calculates:
         - Section traversals (which PLSS sections are crossed)
-        - Starting and ending coordinates in DMS format
-        - Grid bearing and distance for each segment in us survey feet
+        - A Cartesian tie from the nearest calculated PLSS corner to the centerline start
+        - Starting corner and ending coordinates in DMS format
+        - Grid bearing and distance for each centerline segment in US survey feet
         """
         # Access parameters by name for clarity and maintainability
         params = {p.name: p for p in parameters}
@@ -219,11 +235,16 @@ class CenterlineDescribe:
 
         polyline, id = selected_row
 
-        result = process_polyline(
-            polyline,
-            params["in_plss"].value,
-            self.plss_schema,
-        )
+        try:
+            result = process_polyline(
+                polyline,
+                params["in_plss"].value,
+                params["in_plss_points"].value,
+                self.plss_schema,
+            )
+        except ValueError as error:
+            messages.addErrorMessage(str(error))
+            return
 
         messages.addMessage(f"\nSaving Survey123 results to {params['in_survey123_csv'].valueAsText}...")
         messages.addMessage(
@@ -344,6 +365,36 @@ class CenterlineDescribe:
             errors.append(
                 f"This parameter requires the selected PLSS layer to have fields from the SGID Sections dataset.\n\nMissing fields:\n{missing_list}"
             )
+
+        if errors:
+            numbered_errors = "\n\n".join(f"{i + 1}. {msg}" for i, msg in enumerate(errors))
+            parameter.setErrorMessage("details\n\n" + numbered_errors)
+        else:
+            parameter.clearMessage()
+
+        return
+
+    def _validate_plss_points(self, parameter) -> None:
+        """Validates the calculated PLSS monument point layer."""
+        if not parameter.value:
+            return
+
+        errors = []
+        plss_points = parameter.valueAsText
+        parameter.clearMessage()
+
+        metadata = arcpy.da.Describe(plss_points)
+        sr = metadata["spatialReference"]
+
+        if sr.factoryCode != self.required_wkid:
+            errors.append(
+                f"This parameter requires the layer projection to be UTM NAD83 Zone 12N. "
+                f"Select a different point layer or project the data.\n\nFound: {sr.name}"
+            )
+
+        fields = {field.name.lower() for field in metadata["fields"]}
+        if "pointlab" not in fields:
+            errors.append("This parameter requires the selected PLSS point layer to have a POINTLAB field.")
 
         if errors:
             numbered_errors = "\n\n".join(f"{i + 1}. {msg}" for i, msg in enumerate(errors))

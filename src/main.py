@@ -18,9 +18,9 @@ ArcGIS Python Toolbox (CenterlineTools.pyt) for use in geoprocessing tools.
 
 import csv
 import math
-from os import linesep
 from pathlib import Path
 from typing import Any, Optional, TypedDict
+from uuid import uuid4
 
 # Type aliases for arcpy types (arcpy doesn't provide type stubs)
 # Using Any here is intentional - these are duck-typed arcpy objects
@@ -52,6 +52,9 @@ ENCODING = "utf-8"
 NEWLINE = ""
 QUOTE_CHAR = '"'
 FIELD_NAMES = ["id", "starting", "ending", "traversal"]
+CORNER_WHERE_CLAUSE = (
+    "pointlab LIKE '%00%00' OR pointlab LIKE '%40%40' OR pointlab LIKE '%00%40' OR pointlab LIKE '%40%00'"
+)
 
 
 def project_point(point: ArcPyPoint, source_spatial_reference: ArcPySpatialReference) -> ArcPyPoint:
@@ -242,17 +245,17 @@ def format_traversal(traversal_dict: dict[str, list[int]]) -> dict[str, list[int
     for key, sections in traversal_dict.items():
         unique_sections = sorted(set(sections))
         base_meridian, township_range = key.split("-")
-
-        if base_meridian == "26":
-            base_meridian = "Salt Lake Base and Meridian"
-        elif base_meridian == "30":
-            base_meridian = "Uintah Special Meridian"
-        else:
-            base_meridian = "Unknown Meridian"
-
-        formatted[f"{base_meridian} {township_range}"] = unique_sections
+        formatted[f"{_format_base_meridian(base_meridian)} {township_range}"] = unique_sections
 
     return formatted
+
+
+def _format_base_meridian(base_meridian: str) -> str:
+    if base_meridian == "26":
+        return "Salt Lake Base and Meridian"
+    if base_meridian == "30":
+        return "Uintah Special Meridian"
+    return "Unknown Meridian"
 
 
 def get_selected_polyline(feature_layer: ArcPyFeatureLayer, unique_id: str) -> Optional[tuple[ArcPyPolyline, str]]:
@@ -311,32 +314,175 @@ def get_plss_traversal(
     return traversal
 
 
+def get_nearest_calculated_corner(
+    point: ArcPyPoint,
+    plss_points: ArcPyFeatureLayer,
+    spatial_reference: ArcPySpatialReference,
+) -> tuple[tuple[float, float], str]:
+    """Finds the nearest eligible calculated PLSS corner using ArcGIS proximity tools."""
+    import arcpy
+
+    unique_id = uuid4().hex
+    start_name = f"centerline_start_{unique_id}"
+    start_feature = f"memory/{start_name}"
+    near_table = f"memory/nearest_corner_{unique_id}"
+    candidate_layer = f"calculated_corner_candidates_{unique_id}"
+    temporary_data = []
+    temporary_layers = []
+
+    try:
+        temporary_data.append(start_feature)
+        arcpy.management.CreateFeatureclass("memory", start_name, "POINT", spatial_reference=spatial_reference)
+
+        with arcpy.da.InsertCursor(start_feature, ["SHAPE@"]) as cursor:
+            cursor.insertRow([arcpy.PointGeometry(point, spatial_reference)])
+
+        arcpy.management.MakeFeatureLayer(plss_points, candidate_layer, CORNER_WHERE_CLAUSE)
+        temporary_layers.append(candidate_layer)
+
+        temporary_data.append(near_table)
+        arcpy.analysis.GenerateNearTable(
+            start_feature,
+            candidate_layer,
+            near_table,
+            closest="CLOSEST",
+            method="PLANAR",
+        )
+
+        with arcpy.da.SearchCursor(near_table, ["NEAR_FID"]) as cursor:
+            nearest_row = next(cursor, None)
+
+        if nearest_row is None or nearest_row[0] == -1:
+            raise ValueError("No calculated quarter or quarter-quarter corners were found in the PLSS points layer.")
+
+        oid_field = arcpy.Describe(plss_points).OIDFieldName
+        where_clause = f"{oid_field} = {nearest_row[0]}"
+        with arcpy.da.SearchCursor(plss_points, ["SHAPE@XY", "pointlab"], where_clause=where_clause) as cursor:
+            nearest_corner = next(cursor, None)
+
+        if nearest_corner is None:
+            raise ValueError("The nearest calculated corner could not be read from the PLSS points layer.")
+
+        return nearest_corner
+    finally:
+        for temporary_item in reversed(temporary_layers + temporary_data):
+            if arcpy.Exists(temporary_item):
+                arcpy.management.Delete(temporary_item)
+
+
+def get_section_at_point(
+    point_geometry: ArcPyPoint, plss_sections: ArcPyFeatureLayer, plss_schema: list[str]
+) -> tuple[ArcPyPoint, str, str, int]:
+    """Gets the section containing the centerline's first vertex."""
+    import arcpy
+
+    with arcpy.da.SearchCursor(
+        plss_sections,
+        ["SHAPE@", *plss_schema],
+        spatial_filter=point_geometry,
+        spatial_relationship="INTERSECTS",
+    ) as cursor:
+        for geometry, base_meridian, label, section in cursor:
+            if geometry.contains(point_geometry):
+                return geometry, base_meridian, label, section
+
+    raise ValueError("The centerline's first vertex is not inside a PLSS section polygon.")
+
+
+def describe_plss_corner(point_xy: tuple[float, float], point_label: str, section_geometry: ArcPyPoint) -> str:
+    """Describes a GCDB point ID as a corner relative to a PLSS section.
+
+    The point ID's first and last three digits encode its X and Y positions.
+    Their trailing 00/40 markers distinguish section corners, quarter corners,
+    and the section center.
+    """
+    point_label = str(point_label).strip()
+    if point_label.isdigit() and len(point_label) < 6:
+        point_label = point_label.zfill(6)
+    if len(point_label) != 6 or not point_label.isdigit():
+        raise ValueError(f"Unable to interpret GCDB point label {point_label!r} as a six-digit point ID.")
+
+    x_position = point_label[1:3]
+    y_position = point_label[4:6]
+    centroid = section_geometry.centroid
+    east = point_xy[0] > centroid.X
+    north = point_xy[1] > centroid.Y
+
+    if x_position == "00" and y_position == "00":
+        return f"{'N' if north else 'S'}{'E' if east else 'W'} corner"
+    if x_position == "40" and y_position == "00":
+        return f"{'North' if north else 'South'} 1/4 corner"
+    if x_position == "00" and y_position == "40":
+        return f"{'East' if east else 'West'} 1/4 corner"
+    if x_position == "40" and y_position == "40":
+        return "center 1/4 corner"
+
+    raise ValueError(f"GCDB point label {point_label!r} does not identify a standard PLSS corner.")
+
+
+def format_cartesian_corner_tie(
+    corner_xy: tuple[float, float],
+    centerline_start: ArcPyPoint,
+    point_label: str,
+    section: tuple[ArcPyPoint, str, str, int],
+) -> str:
+    """Formats north/south and east/west offsets from a calculated corner."""
+    section_geometry, base_meridian, township_range, section_number = section
+    formatted_township = next(iter(format_traversal({f"{base_meridian}-{township_range}": [section_number]})))
+    corner_name = describe_plss_corner(corner_xy, point_label, section_geometry)
+    tie = f"Beginning at the {corner_name} of Section {section_number}, {formatted_township}; thence "
+
+    delta_x = centerline_start.X - corner_xy[0]
+    delta_y = centerline_start.Y - corner_xy[1]
+    offsets = []
+
+    if delta_y:
+        direction = "north" if delta_y > 0 else "south"
+        distance = meters_to_us_feet(abs(delta_y))
+        offsets.append(f"{distance:g} ft {direction}")
+
+    if delta_x:
+        direction = "east" if delta_x > 0 else "west"
+        distance = meters_to_us_feet(abs(delta_x))
+        offsets.append(f"{distance:g} ft {direction}")
+
+    if not offsets:
+        return f"{tie}the centerline begins at this corner."
+
+    return f"{tie}{' and '.join(offsets)} to the centerline's first vertex."
+
+
 def process_polyline(
-    polyline: ArcPyPolyline, plss_sections: ArcPyFeatureLayer, plss_schema: list[str]
+    polyline: ArcPyPolyline,
+    plss_sections: ArcPyFeatureLayer,
+    plss_points: ArcPyFeatureLayer,
+    plss_schema: list[str],
 ) -> DescriptionDict:
     """Processes a polyline to generate centerline description data.
 
     Analyzes a polyline geometry and generates comprehensive centerline
-    description information including PLSS section traversals, start/end coordinates
-    in DMS format, and bearing/distance data for each segment. Coordinates are
+    description information including PLSS section traversals, the nearest
+    calculated corner tie, start/end coordinates in DMS format, and
+    bearing/distance data for each centerline segment. Coordinates are
     automatically projected to WGS84 for DMS output.
 
     Args:
         polyline: The polyline geometry to process (arcpy.Polyline)
         plss_sections: The PLSS sections feature layer or path to intersect with
+        plss_points: The calculated PLSS corner point layer
         plss_schema (list): List of field names from PLSS sections ["basemeridian", "label", "snum"]
 
     Returns:
         dict: Dictionary containing:
             - "traversal": Dict mapping PLSS township keys to section number lists
-            - "starting": Dict with "lat" and "lon" in DMS format (WGS84)
+            - "starting": Centerline's first vertex coordinates in DMS format (WGS84)
             - "ending": Dict with "lat" and "lon" in DMS format (WGS84)
-            - "bearings": List of bearing strings with distances
+            - "bearings": Corner tie followed by centerline bearing strings with distances
 
     Example:
-        >>> result = process_polyline(polyline, sections_layer, ["basemeridian", "label", "snum"])
+        >>> result = process_polyline(polyline, sections_layer, points_layer, ["basemeridian", "label", "snum"])
         >>> print(result["starting"]["lat"])  # "40°45'30.12345"N"
-        >>> print(result["bearings"][0])  # "N45°30'15"E 328.1 ft"
+        >>> print(result["bearings"][0])  # Beginning-at-corner tie description
     """
     import arcpy
 
@@ -349,6 +495,43 @@ def process_polyline(
 
     result["traversal"] = get_plss_traversal(polyline, plss_sections, plss_schema)
 
+    first_path = next((path for path in polyline if len(path)), None)
+    if first_path is None:
+        raise ValueError("The selected centerline has no vertices.")
+
+    first_point = first_path[0]
+    nearest_corner, point_label = get_nearest_calculated_corner(
+        first_point,
+        plss_points,
+        polyline.spatialReference,
+    )
+    start_point_geometry = arcpy.PointGeometry(first_point, polyline.spatialReference)
+    try:
+        start_section = get_section_at_point(start_point_geometry, plss_sections, plss_schema)
+    except ValueError:
+        if len(first_path) < 2:
+            raise
+
+        next_point = first_path[1]
+        delta_x = next_point.X - first_point.X
+        delta_y = next_point.Y - first_point.Y
+        segment_length = math.hypot(delta_x, delta_y)
+        if not segment_length:
+            raise
+
+        probe_distance = min(0.1, segment_length / 2)
+        probe_point = arcpy.Point(
+            first_point.X + delta_x / segment_length * probe_distance,
+            first_point.Y + delta_y / segment_length * probe_distance,
+        )
+        probe_geometry = arcpy.PointGeometry(probe_point, polyline.spatialReference)
+        start_section = get_section_at_point(probe_geometry, plss_sections, plss_schema)
+
+    projected_start = project_point(first_point, polyline.spatialReference)
+    start_lat, start_lon = decimal_degrees_to_dms(projected_start)
+    result["starting"] = {"lat": start_lat, "lon": start_lon}
+    result["bearings"].append(format_cartesian_corner_tie(nearest_corner, first_point, point_label, start_section))
+
     for path in polyline:
         last_point = None
         for index, point in enumerate(path):
@@ -356,7 +539,6 @@ def process_polyline(
             lat_dms, lon_dms = decimal_degrees_to_dms(projected_point)
 
             if index == 0:
-                result["starting"] = {"lat": lat_dms, "lon": lon_dms}
                 last_point = point
                 continue
             elif index == len(path) - 1:
@@ -465,5 +647,5 @@ def save_description_to(description: DescriptionDict, unique_id: str, survey123:
     bearings_file = bearings_folder / f"{unique_id}_bearings.txt"
 
     with bearings_file.open(MODE_WRITE, encoding=ENCODING) as f:
-        lines = (f"{i}. {bearing}{linesep}" for i, bearing in enumerate(description["bearings"], 1))
+        lines = (f"{i}. {bearing}\n" for i, bearing in enumerate(description["bearings"], 1))
         f.writelines(lines)

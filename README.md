@@ -27,7 +27,7 @@ An ArcGIS python geoprocessing toolbox script tool for describing a polyline fea
 
 ### Required data
 
-The tool requires two inputs:
+The tool requires three input layers:
 
 1. **Centerline layer**: A polyline feature layer with:
    - Projection: UTM NAD83 Zone 12N (EPSG:26912)
@@ -37,7 +37,11 @@ The tool requires two inputs:
    - Projection: UTM NAD83 Zone 12N (EPSG:26912)
    - Fields: `basemeridian`, `label`, `snum`
 
-**Recommended data source**: Use the [Open SGID](https://gis.utah.gov/documentation/sgid/#the-open-sgid-database) to access PLSS data. See [connection instructions](https://gis.utah.gov/documentation/sgid/open-sgid/) if needed. Browse to `cadastre > plss_sections_gcdb`.
+3. **PLSS Points layer**: The [PLSS Point GCDB](https://gis.utah.gov/products/sgid/cadastre/plss-points/) point layer from the Utah SGID with:
+   - Projection: UTM NAD83 Zone 12N (EPSG:26912)
+   - Field: `pointlab`
+
+**Recommended data source**: Use the [Open SGID](https://gis.utah.gov/documentation/sgid/#the-open-sgid-database) to access PLSS data. See [connection instructions](https://gis.utah.gov/documentation/sgid/open-sgid/) if needed. Browse to `cadastre > plss_sections_gcdb` and `cadastre > plss_point_gcdb`.
 
 ### Running the tool
 
@@ -53,9 +57,12 @@ The tool requires two inputs:
    - **Input Feature Layer**: Your centerline layer (with one feature selected)
    - **Unique ID Field**: The field containing the unique identifier for the selected feature
    - **PLSS Section Reference Layer**: The PLSS sections layer
+   - **PLSS Points Layer**: The `plss_point_gcdb` points layer
    - **Survey123 Report CSV**: The CSV file created in step 6
    - **Bearing Output Destination Folder**: The folder where bearing text files will be saved
 1. Click **Run**
+
+The description output begins at the nearest calculated PLSS corner, gives the north/south and east/west offsets to the centerline's first vertex, then lists the centerline courses. The Survey123 CSVs `starting` value is the centerline's first vertex coordinate.
 
 ### Troubleshooting
 
@@ -74,7 +81,6 @@ The tool requires two inputs:
 ### Toolbox Troubleshooting
 
 1. **Code changes are not making their way into the toolbox**
-
    - Right-click the toolbox and choose **Refresh** or press <kbd>F5</kbd> with the toolbox selected.
    - If the changes are in an imported module, then caching is likely the issue. Use this code to reload:
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# * coding: utf8 *
 """
 test_main.py
 Unit tests for the metes and bounds description logic module.

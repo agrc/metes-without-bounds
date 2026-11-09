@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.5](https://github.com/agrc/metes-without-bounds/compare/v1.0.4...v1.0.5) (2026-11-09)
+
+
+### Features
+
+* add nearest quarter-section corner as starting point reference ([c269611](https://github.com/agrc/metes-without-bounds/commit/c2696118af2a9f395609c613c87c380c0253459f)), refs [#21](https://github.com/agrc/metes-without-bounds/issues/21)
+
+
+### Bug Fixes
+
+* add status messages ([10c6014](https://github.com/agrc/metes-without-bounds/commit/10c6014289d5988c2d38da9f2ad9b73010d521bf))
+* choose section name based on corner rather than the first vertex of the centerline ([e156709](https://github.com/agrc/metes-without-bounds/commit/e156709015b24a57a0f896522ef3881a17aa3e54))
+* replace deprecated function call ([beaf621](https://github.com/agrc/metes-without-bounds/commit/beaf62164a5e71fd3a570bcfc8069bba646a01f9))
+
 ## [1.0.4](https://github.com/agrc/metes-without-bounds/compare/v1.0.3...v1.0.4) (2026-02-11)
 
 

@@ -62,13 +62,26 @@ The tool requires three input layers:
    - **Bearing Output Destination Folder**: The folder where bearing text files will be saved
 1. Click **Run**
 
-The description output begins at the nearest calculated PLSS corner, gives the north/south and east/west offsets to the centerline's first vertex, then lists the centerline courses. The Survey123 CSVs `starting` value is the centerline's first vertex coordinate.
+### Description and CSV output
+
+The bearings text file starts with a tie from the nearest eligible calculated PLSS corner to the centerline's first vertex. The tie uses separate Cartesian north/south and east/west offsets, followed by the centerline courses. For example:
+
+```text
+1. Beginning at the West 1/4 corner of Section 12, Salt Lake Base and Meridian T01S R01W; thence 500 ft north and 300 ft east to the centerline's first vertex.
+2. N45°30'15"E 328.1 ft
+```
+
+The corner is selected from the PLSS Point GCDB layer using the `pointlab` patterns for section corners, quarter corners, and quarter-quarter corners, then finding the closest candidate in the projected coordinate system.
+
+The section used to name the corner is the section the centerline enters at its start. When the first vertex is on a shared boundary, the tool checks a short distance along the first nonzero centerline segment. If that still leaves multiple sections (such as a line following a boundary), it chooses deterministically by ascending base meridian, township/range label, then section number.
+
+The Survey123 CSV is unchanged: its `starting` value remains the centerline's first vertex coordinate. The corner tie and detailed courses are written only to the separate bearings text file.
 
 ### Troubleshooting
 
 - **"No features found"**: Ensure exactly one feature is selected in your centerline layer
-- **"Invalid projection"**: Both layers must use UTM NAD83 Zone 12N (EPSG:26912)
-- **"Missing fields"**: Verify your PLSS layer is from the SGID `plss_sections_gcdb` table
+- **"Invalid projection"**: The centerline, PLSS sections, and PLSS points layers must use UTM NAD83 Zone 12N (EPSG:26912)
+- **"Missing fields"**: Verify the PLSS sections layer is from `plss_sections_gcdb` and the PLSS points layer is from `plss_point_gcdb`
 
 ## Development
 

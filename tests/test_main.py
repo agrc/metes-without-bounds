@@ -26,6 +26,7 @@ from src.main import (
     format_cartesian_corner_tie,
     format_traversal,
     get_nearest_calculated_corner,
+    get_section_for_centerline_start,
     meters_to_us_feet,
     process_polyline,
     save_description_to,
@@ -369,6 +370,114 @@ class TestCalculatedCornerTie:
         with pytest.raises(ValueError, match="six-digit point ID"):
             describe_plss_corner((0.0, 0.0), "invalid", section_geometry)
 
+    @pytest.mark.parametrize(
+        ("start", "next_point", "expected_section"),
+        [
+            (MockPoint(5.0, 5.0), MockPoint(6.0, 5.0), 2),
+            (MockPoint(0.0, 5.0), MockPoint(1.0, 5.0), 2),
+            (MockPoint(0.0, 5.0), MockPoint(-1.0, 5.0), 1),
+            (MockPoint(0.0, 5.0), MockPoint(0.0, 6.0), 1),
+        ],
+    )
+    def test_get_section_for_centerline_start_is_directional_and_deterministic(
+        self, monkeypatch, start, next_point, expected_section
+    ):
+        class FakeSection:
+            def __init__(self, min_x, max_x, section_number):
+                self.min_x = min_x
+                self.max_x = max_x
+                self.section_number = section_number
+                self.centroid = MockPoint((min_x + max_x) / 2, 0.0)
+
+            def intersects(self, point_geometry):
+                point = point_geometry.firstPoint
+                return self.min_x <= point.X <= self.max_x and -100 <= point.Y <= 100
+
+            def contains(self, point_geometry):
+                point = point_geometry.firstPoint
+                return self.min_x < point.X < self.max_x and -100 < point.Y < 100
+
+        west_section = FakeSection(-10.0, 0.0, 1)
+        east_section = FakeSection(0.0, 10.0, 2)
+        section_rows = [
+            (west_section, "26", "T01S R01W", 1),
+            (east_section, "26", "T01S R01W", 2),
+        ]
+
+        class FakeCursor:
+            def __init__(self, _layer, _fields, *, spatial_filter, **_kwargs):
+                self.rows = [row for row in reversed(section_rows) if row[0].intersects(spatial_filter)]
+
+            def __enter__(self):
+                return iter(self.rows)
+
+            def __exit__(self, *_args):
+                return False
+
+        fake_arcpy = SimpleNamespace(
+            PointGeometry=lambda point, _sr: SimpleNamespace(firstPoint=point),
+            Point=lambda x, y: MockPoint(x, y),
+            da=SimpleNamespace(SearchCursor=FakeCursor),
+        )
+        monkeypatch.setitem(sys.modules, "arcpy", fake_arcpy)
+        spatial_reference = SimpleNamespace(XYTolerance=0.001)
+        centerline_path = [start, next_point]
+
+        section = get_section_for_centerline_start(
+            centerline_path,
+            spatial_reference,
+            "plss_sections",
+            ["basemeridian", "label", "snum"],
+        )
+
+        assert section[3] == expected_section
+
+    def test_get_section_for_boundary_following_line_uses_metadata_sort(self, monkeypatch):
+        class FakeSection:
+            def __init__(self, section_number):
+                self.section_number = section_number
+                self.centroid = MockPoint(0.0, 0.0)
+
+            def intersects(self, _point_geometry):
+                return True
+
+            def contains(self, _point_geometry):
+                return False
+
+        section_rows = [
+            (FakeSection(10), "26", "T01S R01W", 10),
+            (FakeSection(2), "26", "T01S R01W", 2),
+        ]
+
+        class FakeCursor:
+            def __init__(self, _layer, _fields, **_kwargs):
+                self.rows = list(reversed(section_rows))
+
+            def __enter__(self):
+                return iter(self.rows)
+
+            def __exit__(self, *_args):
+                return False
+
+        monkeypatch.setitem(
+            sys.modules,
+            "arcpy",
+            SimpleNamespace(
+                Point=MockPoint,
+                PointGeometry=lambda point, _sr: SimpleNamespace(firstPoint=point),
+                da=SimpleNamespace(SearchCursor=FakeCursor),
+            ),
+        )
+
+        section = get_section_for_centerline_start(
+            [MockPoint(0.0, 0.0), MockPoint(0.0, 10.0)],
+            SimpleNamespace(XYTolerance=0.001),
+            "plss_sections",
+            ["basemeridian", "label", "snum"],
+        )
+
+        assert section[3] == 2
+
     def test_get_nearest_calculated_corner_filters_candidates(self, monkeypatch):
         calls = []
         existing_items = set()
@@ -515,11 +624,14 @@ class TestCalculatedCornerTie:
         class FakeSection:
             centroid = MockPoint(2000.0, 2000.0)
 
+            def intersects(self, _point):
+                return True
+
             def contains(self, point):
                 return not start_on_boundary or point.firstPoint.X > centerline_points[0].X + 0.01
 
         class FakePolyline:
-            spatialReference = object()
+            spatialReference = SimpleNamespace(XYTolerance=0.001)
 
             def __iter__(self):
                 return iter([centerline_points])

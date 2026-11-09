@@ -368,12 +368,13 @@ def get_nearest_calculated_corner(
                 arcpy.management.Delete(temporary_item)
 
 
-def get_section_at_point(
+def get_sections_at_point(
     point_geometry: ArcPyPoint, plss_sections: ArcPyFeatureLayer, plss_schema: list[str]
-) -> tuple[ArcPyPoint, str, str, int]:
-    """Gets the section containing the centerline's first vertex."""
+) -> list[tuple[ArcPyPoint, str, str, int]]:
+    """Gets all PLSS sections intersecting a point, including shared boundaries."""
     import arcpy
 
+    sections = []
     with arcpy.da.SearchCursor(
         plss_sections,
         ["SHAPE@", *plss_schema],
@@ -381,10 +382,72 @@ def get_section_at_point(
         spatial_relationship="INTERSECTS",
     ) as cursor:
         for geometry, base_meridian, label, section in cursor:
-            if geometry.contains(point_geometry):
-                return geometry, base_meridian, label, section
+            if geometry.intersects(point_geometry):
+                sections.append((geometry, base_meridian, label, section))
 
-    raise ValueError("The centerline's first vertex is not inside a PLSS section polygon.")
+    return sections
+
+
+def _section_sort_key(section: tuple[ArcPyPoint, str, str, int]) -> tuple[str, str, int]:
+    _, base_meridian, township_range, section_number = section
+    return str(base_meridian), str(township_range), int(section_number)
+
+
+def get_section_for_centerline_start(
+    centerline_path: list[ArcPyPoint],
+    spatial_reference: ArcPySpatialReference,
+    plss_sections: ArcPyFeatureLayer,
+    plss_schema: list[str],
+) -> tuple[ArcPyPoint, str, str, int]:
+    """Selects the section entered by the centerline.
+
+    A short probe along the first nonzero segment resolves boundary starts. If
+    the line follows a shared boundary, the lowest base meridian, township/range
+    label, then section number wins, independent of cursor row order.
+    """
+    import arcpy
+
+    if not centerline_path:
+        raise ValueError("The selected centerline has no vertices.")
+
+    first_point = centerline_path[0]
+    start_geometry = arcpy.PointGeometry(first_point, spatial_reference)
+    start_sections = get_sections_at_point(start_geometry, plss_sections, plss_schema)
+    containing_sections = [section for section in start_sections if section[0].contains(start_geometry)]
+
+    if len(containing_sections) == 1:
+        return containing_sections[0]
+
+    next_point = next(
+        (point for point in centerline_path[1:] if math.hypot(point.X - first_point.X, point.Y - first_point.Y) > 0),
+        None,
+    )
+    if next_point is not None:
+        delta_x = next_point.X - first_point.X
+        delta_y = next_point.Y - first_point.Y
+        segment_length = math.hypot(delta_x, delta_y)
+        probe_distance = min(max(spatial_reference.XYTolerance * 2, 0.01), segment_length / 2)
+        probe_point = arcpy.Point(
+            first_point.X + delta_x / segment_length * probe_distance,
+            first_point.Y + delta_y / segment_length * probe_distance,
+        )
+        probe_geometry = arcpy.PointGeometry(probe_point, spatial_reference)
+        probe_sections = get_sections_at_point(probe_geometry, plss_sections, plss_schema)
+        entered_sections = [section for section in probe_sections if section[0].contains(probe_geometry)]
+
+        if entered_sections:
+            return min(entered_sections, key=_section_sort_key)
+
+        if probe_sections:
+            return min(probe_sections, key=_section_sort_key)
+
+    if containing_sections:
+        return min(containing_sections, key=_section_sort_key)
+
+    if start_sections:
+        return min(start_sections, key=_section_sort_key)
+
+    raise ValueError("The centerline's first vertex and path are not inside or on a PLSS section boundary.")
 
 
 def describe_plss_corner(point_xy: tuple[float, float], point_label: str, section_geometry: ArcPyPoint) -> str:
@@ -503,27 +566,12 @@ def process_polyline(
         plss_points,
         polyline.spatialReference,
     )
-    start_point_geometry = arcpy.PointGeometry(first_point, polyline.spatialReference)
-    try:
-        start_section = get_section_at_point(start_point_geometry, plss_sections, plss_schema)
-    except ValueError:
-        if len(first_path) < 2:
-            raise
-
-        next_point = first_path[1]
-        delta_x = next_point.X - first_point.X
-        delta_y = next_point.Y - first_point.Y
-        segment_length = math.hypot(delta_x, delta_y)
-        if not segment_length:
-            raise
-
-        probe_distance = min(0.1, segment_length / 2)
-        probe_point = arcpy.Point(
-            first_point.X + delta_x / segment_length * probe_distance,
-            first_point.Y + delta_y / segment_length * probe_distance,
-        )
-        probe_geometry = arcpy.PointGeometry(probe_point, polyline.spatialReference)
-        start_section = get_section_at_point(probe_geometry, plss_sections, plss_schema)
+    start_section = get_section_for_centerline_start(
+        first_path,
+        polyline.spatialReference,
+        plss_sections,
+        plss_schema,
+    )
 
     projected_start = project_point(first_point, polyline.spatialReference)
     start_lat, start_lon = decimal_degrees_to_dms(projected_start)
